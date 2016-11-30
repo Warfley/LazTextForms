@@ -1,7 +1,7 @@
 program TextFormsExample;
 
 
-uses TextApp, TFTypes, LinkedQueue;
+uses TextApp, TFCanvas, TFControls;
 
 begin
 end.

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <ProjectOptions>
-    <Version Value="10"/>
+    <Version Value="9"/>
     <General>
       <Flags>
         <MainUnitHasCreateFormStatements Value="False"/>
@@ -12,10 +12,6 @@
       <Title Value="TextFormsExample"/>
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
-      <XPManifest>
-        <TextName Value="CompanyName.ProductName.AppName"/>
-        <TextDesc Value="Your application description."/>
-      </XPManifest>
     </General>
     <BuildModes Count="1">
       <Item1 Name="Default" Default="True"/>
@@ -28,7 +24,7 @@
         <FormatVersion Value="1"/>
       </local>
     </RunParams>
-    <Units Count="4">
+    <Units Count="6">
       <Unit0>
         <Filename Value="TextFormsExample.pas"/>
         <IsPartOfProject Value="True"/>
@@ -48,6 +44,16 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="LinkedQueue"/>
       </Unit3>
+      <Unit4>
+        <Filename Value="../tfcanvas.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="TFCanvas"/>
+      </Unit4>
+      <Unit5>
+        <Filename Value="../tfcontrols.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="TFControls"/>
+      </Unit5>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

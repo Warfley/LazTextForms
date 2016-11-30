@@ -5,9 +5,7 @@ unit TFTypes;
 interface
 
 uses
-  Classes, SysUtils,
-  // generic lists
-  fgl, LinkedQueue;
+  Classes, SysUtils, LinkedQueue;
 
 type      
 
@@ -18,30 +16,21 @@ type
     Data: PtrInt;
   end;
 
-  TTextControl = class
-  protected      
-    FParent: TTextControl;
-  public
-
+  TPrintColor = record
+    Background, Foregrond: Byte;
   end;
 
-  TTextWinControl = class(TTextControl)
-  protected
-    FControls: TControlList;
-  public
-    procedure Repaint;
-    procedure DeltaPaint;
-    procedure Resize
+  TPrintObject = record
+    Color: TPrintColor;
+    Value: Char;
   end;
 
-  TControlList = specialize TFPGObjectList<TTextControl>;
-
-  TTextForm = class(TTextWinControl)
-  private
-  public
+  TPrintLine = record
+    Changed: Boolean;
+    Line: Array of TPrintObject;
   end;
 
-  TFormList = specialize TFPGObjectList<TTextForm>;
+  TPrintMap = array of TPrintObject;
   TEventQueue = specialize TLinkedQueue<TEventInformation>;
 
 implementation
