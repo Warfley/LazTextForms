@@ -30,7 +30,7 @@ type
     Line: Array of TPrintObject;
   end;
 
-  TPrintMap = array of TPrintObject;
+  TPrintMap = array of TPrintLine;
   TEventQueue = specialize TLinkedQueue<TEventInformation>;
 
 implementation
