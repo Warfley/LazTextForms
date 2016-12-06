@@ -10,7 +10,11 @@ uses
 type
   TTextWinControl = class;
 
+  { TTextControl }
+
   TTextControl = class
+  private
+    procedure SetParent(AValue: TTextWinControl);
   protected
     FParent: TTextWinControl;
     FRepaintRequired: Boolean;
@@ -22,6 +26,10 @@ type
     property Parent: TTextWinControl read FParent write SetParent;
   end;
 
+  TControlList = specialize TFPGObjectList<TTextControl>;
+
+  { TTextWinControl }
+
   TTextWinControl = class(TTextControl)
   protected
     FControls: TControlList;
@@ -29,7 +37,6 @@ type
     procedure Resize;
   end;
 
-  TControlList = specialize TFPGObjectList<TTextControl>;
 
   TTextForm = class(TTextWinControl)
   private
@@ -39,6 +46,31 @@ type
   TFormList = specialize TFPGObjectList<TTextForm>;
 
 implementation
+
+{ TTextWinControl }
+
+procedure TTextWinControl.Resize;
+begin
+
+end;
+
+{ TTextControl }
+
+procedure TTextControl.SetParent(AValue: TTextWinControl);
+begin
+  if FParent=AValue then Exit;
+  FParent:=AValue;
+end;
+
+procedure TTextControl.Repaint(Canvas: TTextCanvas);
+begin
+
+end;
+
+procedure TTextControl.DeltaPaint(Canvas: TTextCanvas);
+begin
+
+end;
 
 end.
 

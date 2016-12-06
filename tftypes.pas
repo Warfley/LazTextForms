@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, LinkedQueue;
 
-type      
+type
 
   TEventMethod = procedure (Data: PtrInt) of object;
 
@@ -16,8 +16,22 @@ type
     Data: PtrInt;
   end;
 
+  {$IfDef Col24}
+  TColor = record
+    case Boolean of
+    True: (Color: Integer);
+    {$IfDef ENDIAN_LITTLE}
+    False: (Opc, R, G, B: Byte);
+    {$Else}
+    False: (B, G, R, Opc: Byte);
+    {$EndIf}
+  end;
+  {$Else}
+  TColor = Byte;
+  {$EndIf}
+
   TPrintColor = record
-    Background, Foregrond: Byte;
+    Background, Foreground: TColor;
   end;
 
   TPrintObject = record

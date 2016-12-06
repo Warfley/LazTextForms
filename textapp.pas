@@ -5,7 +5,7 @@ unit TextApp;
 interface
 
 uses
-  Classes, SysUtils, CustApp, TFTypes, TFCanvas, Crt;
+  Classes, SysUtils, CustApp, TFTypes, TFCanvas, TFControls, Crt;
 
 type
 
@@ -14,11 +14,10 @@ type
   TTextApplication = class(TCustomApplication)
   protected
     FForms: TFormList;
-    FActiveForm: Integer;
-    FEventQueue:TEventQueue;
+    FActiveForm: integer;
+    FEventQueue: TEventQueue;
     FCanvas: TTextCanvas;
     procedure DoRun; override;
-    procedure RePaint(FullRepaint: Boolean = False);
   public
     procedure QueueEvent(Event: TEventMethod; Data: PtrInt);
     procedure ProcessEvents;
@@ -35,24 +34,6 @@ procedure TTextApplication.DoRun;
 begin
   inherited DoRun;
 
-end;
-
-procedure TTextApplication.RePaint(FullRepaint: Boolean = False);
-var x, y: Integer;
-begin
-  for y:=0 to FCanvas.Height-1 do
-  begin
-    if Not (FullRepaint Or FCanvas.LineChanged[Y]) then Continue;
-    GotoXY(1, y + 1);
-    for x:=0 to FCanvas.Width-1 do
-    begin
-      TextColor(FCanvas.Obj[x,y].Color.Foregrond);
-      TextBackground(FCanvas.Obj[x,y].Color.Background);
-      Write(FCanvas.Obj[x,y].Value);
-    end;
-  end;
-  GotoXY(FCanvas.Width, FCanvas.Height);
-  WriteLn('');
 end;
 
 procedure TTextApplication.QueueEvent(Event: TEventMethod; Data: PtrInt);
@@ -81,4 +62,3 @@ begin
 end;
 
 end.
-

@@ -66,6 +66,12 @@
       <OtherUnitFiles Value="..;../utils"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
+    <Other>
+      <CustomOptions Value="-dCol24"/>
+      <OtherDefines Count="1">
+        <Define0 Value="Col24"/>
+      </OtherDefines>
+    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions Count="3">
