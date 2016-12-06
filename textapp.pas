@@ -5,7 +5,7 @@ unit TextApp;
 interface
 
 uses
-  Classes, SysUtils, CustApp, TFTypes, TFCanvas, TFControls, Crt;
+  Classes, SysUtils, CustApp, TFTypes, TFCanvas, TFControls;
 
 type
 

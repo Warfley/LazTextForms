@@ -15,6 +15,7 @@ type
     Method: TEventMethod;
     Data: PtrInt;
   end;
+  TEventQueue = specialize TLinkedQueue<TEventInformation>;
 
   {$IfDef Col24}
   TColor = record
@@ -45,7 +46,6 @@ type
   end;
 
   TPrintMap = array of TPrintLine;
-  TEventQueue = specialize TLinkedQueue<TEventInformation>;
 
 implementation
 

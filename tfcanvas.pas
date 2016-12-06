@@ -5,8 +5,11 @@ unit TFCanvas;
 interface
 
 uses
-  Classes, SysUtils, Crt, Math,
-  TFTypes in './tftypes.pas';
+  Classes, SysUtils, Math,
+  TFTypes in './tftypes.pas'
+  {$IfNDef COL24}
+  , crt
+  {$EndIf}  ;
 
 type
 
@@ -23,18 +26,19 @@ type
     procedure SetObj(x, y: integer; AValue: TPrintObject);
     procedure SetWidth(AValue: integer);
     procedure MergePO(X, Y: integer; Obj: TPrintObject);
-    procedure PrintLine(y:Integer);
+    procedure PrintLine(y: integer);
   public
     procedure Draw(X, Y: integer; Graphic: TPrintMap);
     procedure TextOut(X, Y: integer; Str: string);
-    procedure Rectangle(X, Y, Width, Heigth: integer);
+    procedure Rectangle(X, Y, Width, Height: integer);
     procedure Ellipsis(X, Y, Width, Height: integer);
     procedure Line(X, Y, X2, Y2: integer);
     constructor Create;
     procedure Resize(Width, Height: integer);
     procedure SetColor(Foreground, Background: TColor);
     procedure Clear;
-    procedure Draw(FullRepaint: Boolean = false);
+    procedure ClearLine(Ln: integer);
+    procedure Print(FullRepaint: boolean = False);
 
     property Graphic: TPrintMap read FGraphic;
     property Color: TPrintColor read FColor write FColor;
@@ -47,16 +51,19 @@ type
 const
   {$IfDef Col24}
   Transparency: TColor = (Color: $64000000);
-  ResetColor: TColor = (Color: $FF000000);
-  NoChange: TColor = (Color: $FE000000);
+  ResetColor: TColor = (Color: Integer($FF000000));
   {$Else}
   Transparency: TColor = 255;
   ResetColor: TColor = LightGray;
-  NoChange: TColor = 254;
+
   {$EndIf}
 
-function RGB(R, G, B: Byte): TColor;
+function RGB(R, G, B: byte): TColor;
 function PrintColor(FG, BG: TColor): TPrintColor;
+procedure MoveCursor(X, Y: integer); inline;
+procedure ClearScreen(); inline;
+procedure SetCursorVisibility(Visible: boolean);
+
 implementation
 
 function MergeColor(A, B: TColor): TColor;
@@ -82,18 +89,66 @@ begin
   {$EndIf}
 end;
 
-function RGB(R, G, B: Byte): TColor;
+function RGB(R, G, B: byte): TColor;
 begin
-  Result.Opc:=100;
-  Result.R:=R;
-  Result.G:=G;
-  Result.B:=B;
+  Result.Opc := 100;
+  Result.R := R;
+  Result.G := G;
+  Result.B := B;
 end;
 
 function PrintColor(FG, BG: TColor): TPrintColor;
 begin
-  Result.Foreground:=FG;
-  Result.Background:=BG;
+  Result.Foreground := FG;
+  Result.Background := BG;
+end;
+
+procedure MoveCursor(X, Y: integer);
+begin
+  {$IfDef COL24}
+  Write(Format(#27'[%d;%dH', [Y, X]));
+  {$Else}
+  GotoXY(X, Y);
+  {$EndIf}
+end;
+
+procedure ClearScreen;
+begin
+  {$IfDef COL24}
+  MoveCursor(1, 1);
+  Write(#27'[39;49m'#27'[2J');
+  {$Else}
+  ClrScr;
+  {$EndIf}
+end;
+
+procedure SetCursorVisibility(Visible: boolean);
+begin
+  if Visible then
+  {$IfDef COL24}
+  Write(#27'[?25h')
+  {$Else}
+    cursoron
+  {$EndIf}
+  else
+  {$IfDef COL24}
+  Write(#27'[?25l');
+  {$Else}
+    cursoroff;
+  {$EndIf}
+end;
+
+function InEllipses(const px, py, cx, cy, rx, ry: integer): boolean; inline;
+begin
+  Result := power((px - cx) / rx, 2) + power((py - cy) / ry, 2) <= 1;
+end;
+
+function IfThenPO(Cond: boolean; A, B: TPrintObject): TPrintObject;
+begin
+  if Cond then
+    Result := A
+  else
+    Result := B;
 end;
 
 { TTextCanvas }
@@ -152,19 +207,15 @@ begin
   with Color.Background do
     if Opc=ResetColor.Opc then // check if reset
       BG := #27'[49m'
-    else if opc=NoChange.Opc then // no change required
-      BG:=''
     else
-      BG := Format('%c[48;2;%d;%d;%d;m',[#27, R, G, B]);
+      BG := Format(#27'[48;2;%d;%d;%dm',[R, G, B]);
 
   // Foreground
   with Color.Foreground do
     if Opc=ResetColor.Opc then
       FG := #27'[39m'
-    else if opc=NoChange.Opc then
-      FG:=''
     else
-      FG := Format('%c[38;2;%d;%d;%d;m',[#27, R, G, B]);
+      FG := Format(#27'[38;2;%d;%d;%dm',[R, G, B]);
 
   Result:=FG+BG;
 end;
@@ -174,15 +225,16 @@ var Buff: TCharBuffer;
 begin
   c:=Low(TCharBuffer);
   FillChar(Buff, Length(Buff), ' ');
-  GotoXY(1, y + 1);
+  MoveCursor(1, y + 1);
   for x:=0 to FWidth-1 do
   begin
     WriteBuffer(Buff, GetColorString(Obj[x,y].Color), c);
     WriteBuffer(Buff, Obj[x,y].Value, c);
   end;
-  // FLush Buffer
+  // Flush Buffer
   FlushBuffer(Buff,c-Low(Buff));
   WriteLn('');
+  FGraphic[y].Changed:=False;
 end;
 
 {$Else}
@@ -194,13 +246,14 @@ begin
   GotoXY(1, y + 1);
   for x := 0 to FCanvas.Width - 1 do
   begin
-    if FCanvas.FCanvas.Obj[x, y].Color.Foregrond < NoChange then
+    if FCanvas.FCanvas.Obj[x, y].Color.Foregrond < Transparency then
       TextColor(FCanvas.Obj[x, y].Color.Foregrond);
-    if FCanvas.FCanvas.Obj[x, y].Color.Background < NoChange then
+    if FCanvas.FCanvas.Obj[x, y].Color.Background < Transparency then
       TextBackground(FCanvas.Obj[x, y].Color.Background);
     Write(FCanvas.Obj[x, y].Value);
   end;
   WriteLn('');
+  FGraphic[y].Changed := False;
 end;
 
 {$EndIf}
@@ -231,6 +284,7 @@ end;
 procedure TTextCanvas.SetObj(x, y: integer; AValue: TPrintObject);
 begin
   FGraphic[y].Line[x] := AValue;
+  FGraphic[y].Changed := True;
 end;
 
 procedure TTextCanvas.SetWidth(AValue: integer);
@@ -263,12 +317,16 @@ begin
   for j := 0 to Length(Graphic) - 1 do
   begin
     if j + y >= FHeight then
-      break;
+      break
+    else if j + y < 0 then
+      Continue;
     FGraphic[j + y].Changed := True;
     for k := 0 to Length(Graphic[j].Line) - 1 do
     begin
       if k + x >= FWidth then
-        break;
+        break
+      else if k + x < 0 then
+        Continue;
       MergePO(k + x, j + y, Graphic[j].Line[k]);
     end;
   end;
@@ -281,29 +339,18 @@ var
 begin
   if y >= FHeight then
     exit;
+  newVal.Color := FColor;
   for i := 1 to Length(Str) do
   begin
     if x + i > FWidth then
       break;
-    if i=1 then
-    newVal.Color := FColor
-    else
-      newVal.Color:= PrintColor(NoChange, NoChange);
     newVal.Value := Str[i];
     MergePO(x + i - 1, Y, newVal);
   end;
+  FGraphic[Y].Changed := True;
 end;
 
-procedure TTextCanvas.Rectangle(X, Y, Width, Heigth: integer);
-
-  function IfThenPO(Cond: boolean; A, B: TPrintObject): TPrintObject;
-  begin
-    if Cond then
-      Result := A
-    else
-      Result := B;
-  end;
-
+procedure TTextCanvas.Rectangle(X, Y, Width, Height: integer);
 var
   j, k, right, bottom: integer;
   Pen, Brush: TPrintObject;
@@ -312,30 +359,87 @@ begin
   Brush.Color.Foreground := Transparency;
   Brush.Color.Background := FColor.Background;
   Pen := Brush;
-    Pen.Color.Background :=
+  Pen.Color.Background :=
     MergeColor(Pen.Color.Background, FColor.Foreground);
 
-  right := Min(x + Width, FWidth - 1);
-  bottom := Min(y + Height, FHeight - 1);
-  for j := y to bottom do
-    for k := x to right do
-      MergePO(k, j, IfThenPO((j = y) or (k = x) or (j = y + Height) or (k = x + Width), Pen, Brush));
+  right := Min(x + Width - 1, FWidth - 1);
+  bottom := Min(y + Height - 1, FHeight - 1);
+  for j := Max(y, 0) to bottom do
+  begin
+    for k := Max(x, 0) to right do
+      MergePO(k, j, IfThenPO((j = y) or (k <= x + 1) or (j = bottom) or
+        (k >= right - 2), Pen, Brush));
+    FGraphic[j].Changed := True;
+  end;
 end;
 
 procedure TTextCanvas.Ellipsis(X, Y, Width, Height: integer);
+var
+  cx, cy, rx, ry, right, bottom, k, j: integer;
+  Pen, Brush: TPrintObject;
 begin
-  // TODO
+  rx := (Width - 1) div 2;
+  ry := (Height) div 2;
+  cx := X + rx;
+  cy := y + ry;
+
+  Brush.Value := ' ';
+  Brush.Color.Foreground := Transparency;
+  Brush.Color.Background := FColor.Background;
+  Pen := Brush;
+  Pen.Color.Background :=
+    MergeColor(Pen.Color.Background, FColor.Foreground);
+
+  right := Min(x + Width - 1, FWidth - 1);
+  bottom := Min(y + Height - 1, FHeight - 1);
+
+  for j := Max(y, 0) to bottom do
+  begin
+    for k := Max(x, 0) to right do
+      if InEllipses(k, j, cx, cy, rx, ry) then
+        MergePO(k, j, IfThenPO(InEllipses(k + 1, j, cx, cy, rx, ry) and
+          InEllipses(k - 1, j, cx, cy, rx, ry) and InEllipses(k + 2,
+          j, cx, cy, rx, ry) and InEllipses(k - 2, j, cx, cy, rx, ry) and
+          InEllipses(k, j + 1, cx, cy, rx, ry) and InEllipses(k, j - 1, cx, cy, rx, ry),
+          Brush, Pen));
+    FGraphic[j].Changed := True;
+  end;
 end;
 
 procedure TTextCanvas.Line(X, Y, X2, Y2: integer);
+var
+  m: double;
+  j, k, lx, rx, ly, ry, right, n: integer;
+  Pen: TPrintObject;
 begin
-  //TODO
+  lx := ifthen(X < X2, X, X2);
+  rx := ifthen(X < X2, X2, X);
+  lY := ifthen(Y < Y2, Y, Y2);
+  rY := ifthen(Y < Y2, Y2, Y);
+
+  m := (ry - ly) / (rx - lx);
+  n := -trunc(X * m - Y);
+
+  Pen.Value := ' ';
+  Pen.Color.Foreground := Transparency;
+  Pen.Color.Background := FColor.Background;
+
+  right := Min(rx, FWidth - 1);
+  for k := Max(lx, 0) to right do
+  begin
+    j := trunc(k * m + n);
+    if (j > Min(ry, FHeight - 1)) or (j < Max(ly, 0)) then
+      Continue;
+    MergePO(k, j, Pen);
+    FGraphic[j].Changed := True;
+  end;
+
 end;
 
 constructor TTextCanvas.Create;
 begin
-  FColor.Foreground := NoChange;
-  FColor.Background := NoChange;
+  FColor.Foreground := ResetColor;
+  FColor.Background := ResetColor;
 end;
 
 procedure TTextCanvas.Resize(Width, Height: integer);
@@ -359,22 +463,36 @@ begin
   c.Color.Foreground := ResetColor;
   c.Value := ' ';
   for y := 0 to FHeight - 1 do
+  begin
     for x := 0 to FWidth - 1 do
-      Obj[x, y] := c;
+      FGraphic[y].Line[x] := c;
+    FGraphic[Y].Changed := True;
+  end;
 end;
 
-procedure TTextCanvas.Draw(FullRepaint: Boolean);
+procedure TTextCanvas.ClearLine(Ln: integer);
+var
+  x: integer;
+begin
+  FGraphic[Ln].Changed := True;
+  for x := 0 to FWidth - 1 do
+  begin
+    FGraphic[Ln].Line[x].Value := ' ';
+    FGraphic[Ln].Line[x].Color := PrintColor(ResetColor, ResetColor);
+  end;
+end;
+
+procedure TTextCanvas.Print(FullRepaint: boolean);
 var
   y: integer;
 begin
-  ClrScr;
   for y := 0 to FHeight - 1 do
   begin
     if not (FullRepaint or LineChanged[Y]) then
       Continue;
     PrintLine(y);
   end;
-  GotoXY(FWidth, FHeight);
+  MoveCursor(FWidth, FHeight);
   WriteLn('');
 end;
 
