@@ -9,7 +9,13 @@ uses
   TFTypes in './tftypes.pas'
   {$IfNDef COL24}
   , crt
-  {$EndIf}  ;
+  {$EndIf}
+  {$IfDef UNIX}
+  , BaseUnix, termio
+  {$Else}
+  , windows
+  {$EndIf}
+  ;
 
 type
 
@@ -55,7 +61,6 @@ const
   {$Else}
   Transparency: TColor = 255;
   ResetColor: TColor = LightGray;
-
   {$EndIf}
 
 function RGB(R, G, B: byte): TColor;
@@ -63,6 +68,7 @@ function PrintColor(FG, BG: TColor): TPrintColor;
 procedure MoveCursor(X, Y: integer); inline;
 procedure ClearScreen(); inline;
 procedure SetCursorVisibility(Visible: boolean);
+function GetWindowSize: TWindowSize;
 
 implementation
 
@@ -137,6 +143,21 @@ begin
     cursoroff;
   {$EndIf}
 end;
+
+  {$IfDef UNIX}
+function GetWindowSize: TWindowSize;
+var sz: TWinSize;
+begin
+  FpIOCtl(StdOutputHandle, TIOCGWINSZ, @sz);
+  Result.Width:=sz.ws_col;
+  Result.Height:=sz.ws_row;
+end;
+  {$Else}
+function GetWindowSize: TWindowSize;
+begin
+
+end;
+  {$EndIf}
 
 function InEllipses(const px, py, cx, cy, rx, ry: integer): boolean; inline;
 begin

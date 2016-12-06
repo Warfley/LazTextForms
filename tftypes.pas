@@ -15,7 +15,12 @@ type
     Method: TEventMethod;
     Data: PtrInt;
   end;
+
   TEventQueue = specialize TLinkedQueue<TEventInformation>;
+
+  TWindowSize = record
+    Width, Height: Integer;
+  end;
 
   {$IfDef Col24}
   TColor = record
