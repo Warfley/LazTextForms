@@ -367,6 +367,7 @@ procedure TTextCanvas.Draw(FullRepaint: Boolean);
 var
   y: integer;
 begin
+  ClrScr;
   for y := 0 to FHeight - 1 do
   begin
     if not (FullRepaint or LineChanged[Y]) then
