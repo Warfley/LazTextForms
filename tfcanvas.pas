@@ -13,9 +13,8 @@ uses
   {$IfDef UNIX}
   , BaseUnix, termio
   {$Else}
-  , windows
-  {$EndIf}
-  ;
+  , Windows
+  {$EndIf}  ;
 
 type
 
@@ -61,6 +60,7 @@ const
   {$Else}
   Transparency: TColor = 255;
   ResetColor: TColor = LightGray;
+
   {$EndIf}
 
 function RGB(R, G, B: byte): TColor;
@@ -153,10 +153,17 @@ begin
   Result.Height:=sz.ws_row;
 end;
   {$Else}
-function GetWindowSize: TWindowSize;
-begin
 
+function GetWindowSize: TWindowSize;
+var
+  csbi: CONSOLE_SCREEN_BUFFER_INFO;
+begin
+  FillChar(csbi, SizeOf(csbi), 0);
+  GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), csbi);
+  Result.Width := csbi.srWindow.Right - csbi.srWindow.Left + 1;
+  Result.Height := csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
 end;
+
   {$EndIf}
 
 function InEllipses(const px, py, cx, cy, rx, ry: integer): boolean; inline;
