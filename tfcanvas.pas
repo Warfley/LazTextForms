@@ -60,8 +60,8 @@ const
   {$Else}
   Transparency: TColor = 255;
   ResetColor: TColor = LightGray;
-
   {$EndIf}
+	MaxBuffSize = 255;
 
   {$IfDef Col24}
 function RGB(R, G, B: byte): TColor;
@@ -260,7 +260,7 @@ end;
 
 procedure TTextCanvas.PrintLine(y: Integer);
 // Buffer Array type
-type TCharBuffer = array [0..255] of Char;
+type TCharBuffer = array [0..MaxBuffSize] of Char;
 
 // Flush buffer to STDOut
 procedure FlushBuffer(Buff: TCharBuffer; Len: Integer);
