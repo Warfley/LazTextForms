@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Math,
   TFTypes in './tftypes.pas'
-  {$IfNDef COL24}
+  {$IfNDef Col24}
   , crt
   {$EndIf}
   {$IfDef UNIX}
@@ -63,14 +63,75 @@ const
 
   {$EndIf}
 
+  {$IfDef Col24}
 function RGB(R, G, B: byte): TColor;
+  {$EndIf}
 function PrintColor(FG, BG: TColor): TPrintColor;
 procedure MoveCursor(X, Y: integer); inline;
 procedure ClearScreen(); inline;
 procedure SetCursorVisibility(Visible: boolean);
 function GetWindowSize: TWindowSize;
+// Reads a char without the need of enter
+function ReadChar(Blocking: Boolean = True): Char;
 
 implementation
+
+{$IfDef UNIX}
+
+// found at https://ubuntuforums.org/showthread.php?t=554845
+  function ReadChar(Blocking: Boolean = True): Char;
+  var
+    org_opts, new_opts: Termios;
+    flags, res: Integer;
+  begin
+    //-----  store old settings -----------
+    TCGetAttr(StdInputHandle, org_opts);
+    if not Blocking then
+    begin
+      flags:=FpFcntl(StdInputHandle, F_GetFl, 0);
+      FpFcntl(StdInputHandle, F_SetFl, flags or O_NONBLOCK);
+    end;
+
+    //---- set new terminal parms --------
+    Move(org_opts, new_opts, sizeof(new_opts));
+    new_opts.c_lflag := new_opts.c_lflag or not (ICANON or ECHO or
+      ECHOE or ECHOK or ECHONL or ECHOPRT or ECHOKE or ICRNL);
+    TCSetAttr(StdInputHandle, TCSANOW, new_opts);
+    res := FpRead(StdInputHandle, Result, 1);
+    if res = 0 then Result:=#0;
+
+    //------  restore old settings ---------
+    TCSetAttr(StdInputHandle, TCSANOW, org_opts);
+    if not Blocking then
+    FpFcntl(StdInputHandle, F_SetFl, flags);
+  end;
+{$Else}
+
+   // found at http://www.cplusplus.com/forum/articles/19975/
+  function ReadChar(Blocking: Boolean = True): Char;
+  var
+    hstdin: HANDLE;
+    irInputRecord: INPUT_RECORD;
+    dwEventsRead: DWORD;
+    r: DWORD;
+  begin
+    hStdin := GetStdHandle(STD_INPUT_HANDLE);
+    if Blocking or (r>0) then
+    while ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead) do
+      if (irInputRecord.EventType = KEY_EVENT) and
+        (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_SHIFT) and
+        (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_MENU) and
+        (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_CONTROL) then
+      begin
+        Result := irInputRecord.Event.KeyEvent.AsciiChar;
+        ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead);
+        Exit;
+      end
+      else if not Blocking then break;
+    Result := #0;
+  end;
+
+{$EndIf}
 
 function MergeColor(A, B: TColor): TColor;
 begin
@@ -95,6 +156,7 @@ begin
   {$EndIf}
 end;
 
+  {$IfDef Col24}
 function RGB(R, G, B: byte): TColor;
 begin
   Result.Opc := 100;
@@ -102,6 +164,7 @@ begin
   Result.G := G;
   Result.B := B;
 end;
+  {$EndIf}
 
 function PrintColor(FG, BG: TColor): TPrintColor;
 begin
@@ -111,7 +174,7 @@ end;
 
 procedure MoveCursor(X, Y: integer);
 begin
-  {$IfDef COL24}
+  {$IfDef Col24}
   Write(Format(#27'[%d;%dH', [Y, X]));
   {$Else}
   GotoXY(X, Y);
@@ -120,7 +183,7 @@ end;
 
 procedure ClearScreen;
 begin
-  {$IfDef COL24}
+  {$IfDef Col24}
   MoveCursor(1, 1);
   Write(#27'[39;49m'#27'[2J');
   {$Else}
@@ -131,13 +194,13 @@ end;
 procedure SetCursorVisibility(Visible: boolean);
 begin
   if Visible then
-  {$IfDef COL24}
+  {$IfDef Col24}
   Write(#27'[?25h')
   {$Else}
     cursoron
   {$EndIf}
   else
-  {$IfDef COL24}
+  {$IfDef Col24}
   Write(#27'[?25l');
   {$Else}
     cursoroff;
@@ -193,7 +256,7 @@ begin
 end;
 
 
-{$IfDef COL24}
+{$IfDef Col24}
 
 procedure TTextCanvas.PrintLine(y: Integer);
 // Buffer Array type
@@ -272,13 +335,13 @@ var
   x: integer;
 begin
   GotoXY(1, y + 1);
-  for x := 0 to FCanvas.Width - 1 do
+  for x := 0 to Width - 1 do
   begin
-    if FCanvas.FCanvas.Obj[x, y].Color.Foregrond < Transparency then
-      TextColor(FCanvas.Obj[x, y].Color.Foregrond);
-    if FCanvas.FCanvas.Obj[x, y].Color.Background < Transparency then
-      TextBackground(FCanvas.Obj[x, y].Color.Background);
-    Write(FCanvas.Obj[x, y].Value);
+    if Obj[x, y].Color.Foreground < Transparency then
+      TextColor(Obj[x, y].Color.Foreground);
+    if Obj[x, y].Color.Background < Transparency then
+      TextBackground(Obj[x, y].Color.Background);
+    Write(Obj[x, y].Value);
   end;
   WriteLn('');
   FGraphic[y].Changed := False;
@@ -396,7 +459,7 @@ begin
   begin
     for k := Max(x, 0) to right do
       MergePO(k, j, IfThenPO((j = y) or (k <= x + 1) or (j = bottom) or
-        (k >= right - 2), Pen, Brush));
+        (k >= right - 1), Pen, Brush));
     FGraphic[j].Changed := True;
   end;
 end;
