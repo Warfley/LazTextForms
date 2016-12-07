@@ -116,6 +116,7 @@ implementation
     r: DWORD;
   begin
     hStdin := GetStdHandle(STD_INPUT_HANDLE);
+    GetNumberOfConsoleInputEvents(hstdin, r);
     if Blocking or (r>0) then
     while ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead) do
       if (irInputRecord.EventType = KEY_EVENT) and
