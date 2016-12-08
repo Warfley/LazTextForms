@@ -26,7 +26,7 @@ type
   TColor = record
     case Boolean of
     True: (Color: Integer);
-    {$IfDef ENDIAN_LITTLE}
+    {$IfNDef ENDIAN_LITTLE}
     False: (Opc, R, G, B: Byte);
     {$Else}
     False: (B, G, R, Opc: Byte);

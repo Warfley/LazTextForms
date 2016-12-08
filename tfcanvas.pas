@@ -55,13 +55,15 @@ type
 
 const
   {$IfDef Col24}
-  Transparency: TColor = (Color: $64000000);
-  ResetColor: TColor = (Color: Integer($FF000000));
+  Transparency: TColor = (Color: $00000000);
+  ResetFGColor: TColor = (Color: Integer($FF000000));
+  ResetBGColor: TColor = (Color: Integer($FF000000));
   {$Else}
   Transparency: TColor = 255;
-  ResetColor: TColor = LightGray;
+  ResetFGColor: TColor = LightGray;
+  ResetBGColor: TColor = Black;
   {$EndIf}
-	MaxBuffSize = 255;
+	MaxBuffSize = 256;
 
   {$IfDef Col24}
 function RGB(R, G, B: byte): TColor;
@@ -82,28 +84,38 @@ implementation
   function ReadChar(Blocking: Boolean = True): Char;
   var
     org_opts, new_opts: Termios;
-    flags, res: Integer;
+    {$IfDef NonBlockingStdIn}
+    flags,
+    {$EndIf}
+    res: Integer;
   begin
-    //-----  store old settings -----------
-    TCGetAttr(StdInputHandle, org_opts);
     if not Blocking then
     begin
+    {$ifDef NonBlockingStdIn}
       flags:=FpFcntl(StdInputHandle, F_GetFl, 0);
       FpFcntl(StdInputHandle, F_SetFl, flags or O_NONBLOCK);
+    {$Else}
+    FpIOCtl(StdInputHandle, FIONREAD, @res);
+    if res = 0 then exit;
+    {$EndIf}
     end;
-
+    //-----  store old settings -----------
+    TCGetAttr(StdInputHandle, org_opts);
     //---- set new terminal parms --------
     Move(org_opts, new_opts, sizeof(new_opts));
     new_opts.c_lflag := new_opts.c_lflag or not (ICANON or ECHO or
       ECHOE or ECHOK or ECHONL or ECHOPRT or ECHOKE or ICRNL);
+    //new_opts.c_lflag := new_opts.c_lflag And not ICANON;
     TCSetAttr(StdInputHandle, TCSANOW, new_opts);
     res := FpRead(StdInputHandle, Result, 1);
     if res = 0 then Result:=#0;
 
     //------  restore old settings ---------
     TCSetAttr(StdInputHandle, TCSANOW, org_opts);
+    {$ifDef NonBlockingStdIn}
     if not Blocking then
     FpFcntl(StdInputHandle, F_SetFl, flags);
+    {$EndIf}
   end;
 {$Else}
 
@@ -261,7 +273,7 @@ end;
 
 procedure TTextCanvas.PrintLine(y: Integer);
 // Buffer Array type
-type TCharBuffer = array [0..MaxBuffSize] of Char;
+type TCharBuffer = array [0..MaxBuffSize - 1] of Char;
 
 // Flush buffer to STDOut
 procedure FlushBuffer(Buff: TCharBuffer; Len: Integer);
@@ -297,14 +309,14 @@ var FG, BG: String;
 begin
   // Background
   with Color.Background do
-    if Opc=ResetColor.Opc then // check if reset
+    if Opc=ResetBGColor.Opc then // check if reset
       BG := #27'[49m'
     else
       BG := Format(#27'[48;2;%d;%d;%dm',[R, G, B]);
 
   // Foreground
   with Color.Foreground do
-    if Opc=ResetColor.Opc then
+    if Opc=ResetFGColor.Opc then
       FG := #27'[39m'
     else
       FG := Format(#27'[38;2;%d;%d;%dm',[R, G, B]);
@@ -395,8 +407,8 @@ begin
     for x := w to AValue - 1 do
     begin
       FGraphic[i].Line[x].Value := ' ';
-      FGraphic[i].Line[x].Color.Background := ResetColor;
-      FGraphic[i].Line[x].Color.Foreground := ResetColor;
+      FGraphic[i].Line[x].Color.Background := ResetBGColor;
+      FGraphic[i].Line[x].Color.Foreground := ResetFGColor;
     end;
     FGraphic[i].Changed := True;
   end;
@@ -530,8 +542,8 @@ end;
 
 constructor TTextCanvas.Create;
 begin
-  FColor.Foreground := ResetColor;
-  FColor.Background := ResetColor;
+  FColor.Foreground := ResetFGColor;
+  FColor.Background := ResetBGColor;
 end;
 
 procedure TTextCanvas.Resize(Width, Height: integer);
@@ -551,8 +563,8 @@ var
   x, y: integer;
   c: TPrintObject;
 begin
-  c.Color.Background := ResetColor;
-  c.Color.Foreground := ResetColor;
+  c.Color.Background := ResetBGColor;
+  c.Color.Foreground := ResetFGColor;
   c.Value := ' ';
   for y := 0 to FHeight - 1 do
   begin
@@ -570,7 +582,7 @@ begin
   for x := 0 to FWidth - 1 do
   begin
     FGraphic[Ln].Line[x].Value := ' ';
-    FGraphic[Ln].Line[x].Color := PrintColor(ResetColor, ResetColor);
+    FGraphic[Ln].Line[x].Color := PrintColor(ResetFGColor, ResetBGColor);
   end;
 end;
 
