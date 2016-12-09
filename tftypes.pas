@@ -1,5 +1,7 @@
 unit TFTypes;
 
+{$Include defines.inc}
+
 {$mode objfpc}{$H+}
 
 interface
@@ -22,19 +24,38 @@ type
     Width, Height: Integer;
   end;
 
-  {$IfDef Col24}
-  TColor = record
+  TColor24 = record
     case Boolean of
     True: (Color: Integer);
-    {$IfNDef ENDIAN_LITTLE}
-    False: (Opc, R, G, B: Byte);
-    {$Else}
+    {$IfDef ENDIAN_LITTLE}
     False: (B, G, R, Opc: Byte);
+    {$Else}
+    False: (Opc, R, G, B: Byte);
     {$EndIf}
   end;
+
+  TColor8 = record
+    case Boolean of
+    True: (Color: Word);
+    {$IfDef ENDIAN_LITTLE}
+    False: (Col, Opc: Byte);
+    {$Else}
+    False: (Opc, Col: Byte);
+    {$EndIf}
+  end;
+
+  TColor4 = Byte;
+
+  TColor =
+  {$IfDef Col24}
+    TColor24
   {$Else}
-  TColor = Byte;
-  {$EndIf}
+    {$IfDef Col8}
+      TColor8
+    {$Else}
+      TColor4
+    {$EndIf}
+  {$EndIf};
 
   TPrintColor = record
     Background, Foreground: TColor;

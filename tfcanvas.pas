@@ -1,4 +1,26 @@
+{ TextCanvas, Textmode graphic library
+
+  Copyright (C) 2016 Frederic Kehrein frederic@kehrein.org
+
+  This library is free software; you can redistribute it and/or modify it
+  under the terms of the GNU Library General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or (at your
+  option) any later version.
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  FITNESS FOR A PARTICULAR PURPOSE. See the GNU Library General Public License
+  for more details.
+
+  You should have received a copy of the GNU Library General Public License
+  along with this library; if not, write to the Free Software Foundation,
+  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+}
+
+{ TODO : Utf-8 Support }
 unit TFCanvas;
+
+{$Include defines.inc}
 
 {$mode objfpc}{$H+}
 
@@ -7,7 +29,7 @@ interface
 uses
   Classes, SysUtils, Math,
   TFTypes in './tftypes.pas'
-  {$IfNDef Col24}
+  {$IfDef Col4}
   , crt
   {$EndIf}
   {$IfDef UNIX}
@@ -55,19 +77,23 @@ type
 
 const
   {$IfDef Col24}
-  Transparency: TColor = (Color: $00000000);
-  ResetFGColor: TColor = (Color: Integer($FF000000));
-  ResetBGColor: TColor = (Color: Integer($FF000000));
+    Transparency: TColor = (Color: $00000000);
+    ResetFGColor: TColor = (Color: Integer($FF000000));
+    ResetBGColor: TColor = (Color: Integer($FF000000));
   {$Else}
-  Transparency: TColor = 255;
-  ResetFGColor: TColor = LightGray;
-  ResetBGColor: TColor = Black;
+    {$IfDef Col8}
+      Transparency: TColor = (Color: $0000);
+      ResetFGColor: TColor = (Color: Integer($FF00));
+      ResetBGColor: TColor = (Color: Integer($FF00));
+    {$Else}
+      Transparency: TColor = 255;
+      ResetFGColor: TColor = LightGray;
+      ResetBGColor: TColor = Black;
+    {$EndIf}
   {$EndIf}
 	MaxBuffSize = 256;
 
-  {$IfDef Col24}
 function RGB(R, G, B: byte): TColor;
-  {$EndIf}
 function PrintColor(FG, BG: TColor): TPrintColor;
 procedure MoveCursor(X, Y: integer); inline;
 procedure ClearScreen(); inline;
@@ -75,6 +101,13 @@ procedure SetCursorVisibility(Visible: boolean);
 function GetWindowSize: TWindowSize;
 // Reads a char without the need of enter
 function ReadChar(Blocking: Boolean = True): Char;
+function LCLColToCanvasColor(Col: Cardinal): TColor;
+
+{$If defined(COL8) or defined(Col4)}
+function FindTableIndex(C: Cardinal; StartIndex: Integer = 0): Integer;
+
+const ColTable: array[0..255] of Cardinal = ({$Include table.inc});
+{$EndIf}
 
 implementation
 
@@ -147,6 +180,9 @@ implementation
 {$EndIf}
 
 function MergeColor(A, B: TColor): TColor;
+  {$IfDef Col8}
+var ra,ga,ba, rb,gb,bb: Integer;
+  {$EndIf}
 begin
   {$IfDef Col24}
   case B.Opc of
@@ -162,22 +198,128 @@ begin
     Result:=B;
   end;
   {$Else}
+  {$IfDef Col8}
+  case B.Opc of
+    0: Result:=A;
+    1..99:
+  begin
+    Result.Opc:=100;
+    case b.Col of
+    16..231:
+      begin
+        ra:=(a.Col-16) div 36;
+        ga:=(a.Col-16) mod 36 div 6;
+        ba:=(a.Col-16) mod 6;
+
+        rb:=(b.Col-16) div 36;
+        gb:=(b.Col-16) mod 36 div 6;
+        bb:=(b.Col-16) mod 6;
+
+        Ra:=trunc((Ra/100)*(100-B.Opc)+(Rb/100)*B.Opc);
+        Ga:=trunc((Ga/100)*(100-B.Opc)+(gb/100)*B.Opc);
+        Ba:=trunc((Ba/100)*(100-B.Opc)+(Bb/100)*B.Opc);
+        Result.Col:=16*36*ra+6*ga+ba;
+      end;
+      232..255: Result.Col:=trunc(((A.Col - 232)/100)*(100-B.Opc)+((B.Col - 232)/100)*B.Opc)+232;
+      else
+      begin
+        Result.Col:=ifthen(b.Opc>=50, b.Col, a.Col);
+      end;
+    end;
+  end
+  else
+    Result:=B;
+  end;
+  {$Else}
   if B < 16 then
     Result := B
   else
     Result := A;
   {$EndIf}
+  {$EndIf}
 end;
 
-  {$IfDef Col24}
-function RGB(R, G, B: byte): TColor;
+
+function LCLColToCanvasColor(Col: Cardinal): TColor;
+type
+  TLazColor = record
+    case Boolean of
+    True: (Color: Integer);
+    {$IfDef ENDIAN_LITTLE}
+    False: (Opc, R, G, B: Byte);
+    {$Else}
+    False: (B, G, R, Opc: Byte);
+    {$EndIf}
+end;
+var lc: TLazColor;
 begin
+  lc.Color := Col;
+  Result := RGB(lc.R, lc.G, lc.B);
+end;
+
+{$If defined(Col4) or defined(COL8)}
+function CompareColors(A, B: Cardinal): Integer;
+var C1, C2: TColor24;
+begin
+  C1.Color:=A;
+  C2.Color:=B;
+  Result:=abs(C1.R-C2.R)+abs(C1.G-C2.G)+abs(C1.B-C2.B);
+end;
+
+function FindTableIndex(C: Cardinal; StartIndex: Integer = 0): Integer;
+const
+  TableMax =
+  {$IfDef Col4}
+    15
+  {$else}
+    255
+  {$EndIf};
+var i,
+  cmp,
+  MinDiff: Integer;
+begin
+  Result:=StartIndex;
+  MinDiff:=High(Integer);
+  for i:=StartIndex to TableMax do
+  begin
+    cmp:=CompareColors(C, ColTable[i]);
+    if cmp<MinDiff then
+    begin
+      Result:=i;
+      MinDiff:=cmp;
+    end;
+  end;
+end;
+
+{$EndIf}
+
+function RGB(R, G, B: byte): TColor;
+{$If defined(Col4) or defined(COL8)}
+var
+  Ref: TColor24;
+{$EndIf}
+begin
+  {$IfDef Col24}
   Result.Opc := 100;
   Result.R := R;
   Result.G := G;
   Result.B := B;
-end;
+  {$Else}
+  Ref.R:=R;
+  Ref.G:=G;
+  Ref.B:=B;
+  Ref.Opc:=0;
+  {$IfDef COL8}
+  Result.Opc:=100;
+  if (R=B) and (B=G) then // grayscale
+    Result.Col:=FindTableIndex(Ref.Color, 232)
+  else
+    Result.Col:=16+round(R/255*5)*36+round(G/255*5)*6+round(B/255*5);
+  {$Else} // Col4
+  Result:=FindTableIndex(Ref.Color);
   {$EndIf}
+  {$EndIf}
+end;
 
 function PrintColor(FG, BG: TColor): TPrintColor;
 begin
@@ -187,7 +329,7 @@ end;
 
 procedure MoveCursor(X, Y: integer);
 begin
-  {$IfDef Col24}
+  {$IfDef AnsiEscape}
   Write(Format(#27'[%d;%dH', [Y, X]));
   {$Else}
   GotoXY(X, Y);
@@ -196,7 +338,7 @@ end;
 
 procedure ClearScreen;
 begin
-  {$IfDef Col24}
+  {$IfDef AnsiEscape}
   MoveCursor(1, 1);
   Write(#27'[39;49m'#27'[2J');
   {$Else}
@@ -207,13 +349,13 @@ end;
 procedure SetCursorVisibility(Visible: boolean);
 begin
   if Visible then
-  {$IfDef Col24}
+  {$IfDef AnsiEscape}
   Write(#27'[?25h')
   {$Else}
     cursoron
   {$EndIf}
   else
-  {$IfDef Col24}
+  {$IfDef AnsiEscape}
   Write(#27'[?25l');
   {$Else}
     cursoroff;
@@ -269,7 +411,7 @@ begin
 end;
 
 
-{$IfDef Col24}
+{$IfDef AnsiEscape}
 
 procedure TTextCanvas.PrintLine(y: Integer);
 // Buffer Array type
@@ -312,14 +454,25 @@ begin
     if Opc=ResetBGColor.Opc then // check if reset
       BG := #27'[49m'
     else
-      BG := Format(#27'[48;2;%d;%d;%dm',[R, G, B]);
+      BG :=
+      {$IfDef Col24}
+        Format(#27'[48;2;%d;%d;%dm',[R, G, B]);
+      {$Else}
+        Format(#27'[48;5;%dm',[Col]);
+      {$EndIf}
+
 
   // Foreground
   with Color.Foreground do
     if Opc=ResetFGColor.Opc then
       FG := #27'[39m'
     else
-      FG := Format(#27'[38;2;%d;%d;%dm',[R, G, B]);
+      FG :=
+      {$IfDef Col24}
+        Format(#27'[38;2;%d;%d;%dm',[R, G, B]);
+      {$Else}
+        Format(#27'[38;5;%dm',[Col]);
+      {$EndIf}
 
   Result:=FG+BG;
 end;
