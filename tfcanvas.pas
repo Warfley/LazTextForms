@@ -28,7 +28,7 @@ interface
 
 uses
   Classes, SysUtils, Math,
-  TFTypes in './tftypes.pas'
+  TFTypes in 'tftypes.pas'
   {$IfDef Col4}
   , crt
   {$EndIf}
@@ -77,21 +77,21 @@ type
 
 const
   {$IfDef Col24}
-    Transparency: TColor = (Color: $00000000);
-    ResetFGColor: TColor = (Color: Integer($FF000000));
-    ResetBGColor: TColor = (Color: Integer($FF000000));
+  Transparency: TColor = (Color: $00000000);
+  ResetFGColor: TColor = (Color: integer($FF000000));
+  ResetBGColor: TColor = (Color: integer($FF000000));
   {$Else}
     {$IfDef Col8}
-      Transparency: TColor = (Color: $0000);
-      ResetFGColor: TColor = (Color: Integer($FF00));
-      ResetBGColor: TColor = (Color: Integer($FF00));
+  Transparency: TColor = (Color: $0000);
+  ResetFGColor: TColor = (Color: integer($FF00));
+  ResetBGColor: TColor = (Color: integer($FF00));
     {$Else}
-      Transparency: TColor = 255;
-      ResetFGColor: TColor = LightGray;
-      ResetBGColor: TColor = Black;
+  Transparency: TColor = 255;
+  ResetFGColor: TColor = LightGray;
+  ResetBGColor: TColor = Black;
     {$EndIf}
   {$EndIf}
-	MaxBuffSize = 256;
+  MaxBuffSize = 1024;
 
 function RGB(R, G, B: byte): TColor;
 function PrintColor(FG, BG: TColor): TPrintColor;
@@ -100,69 +100,76 @@ procedure ClearScreen(); inline;
 procedure SetCursorVisibility(Visible: boolean);
 function GetWindowSize: TWindowSize;
 // Reads a char without the need of enter
-function ReadChar(Blocking: Boolean = True): Char;
-function LCLColToCanvasColor(Col: Cardinal): TColor;
+function ReadChar(Blocking: boolean = True): char;
+function LCLColToCanvasColor(Col: cardinal): TColor;
 
 {$If defined(COL8) or defined(Col4)}
-function FindTableIndex(C: Cardinal; StartIndex: Integer = 0): Integer;
+function FindTableIndex(C: cardinal; StartIndex: integer = 0): integer;
 
-const ColTable: array[0..255] of Cardinal = ({$Include table.inc});
+const
+  ColTable: array[0..255] of cardinal = ({$Include table.inc});
 {$EndIf}
 
 implementation
 
 {$IfDef UNIX}
 
-// found at https://ubuntuforums.org/showthread.php?t=554845
-  function ReadChar(Blocking: Boolean = True): Char;
-  var
-    org_opts, new_opts: Termios;
+function ReadChar(Blocking: boolean = True): char;
+var
+  oTIO, nTIO: Termios;
     {$IfDef NonBlockingStdIn}
-    flags,
-    {$EndIf}
-    res: Integer;
-  begin
-    if not Blocking then
-    begin
-    {$ifDef NonBlockingStdIn}
-      flags:=FpFcntl(StdInputHandle, F_GetFl, 0);
-      FpFcntl(StdInputHandle, F_SetFl, flags or O_NONBLOCK);
+  flags,
     {$Else}
-    FpIOCtl(StdInputHandle, FIONREAD, @res);
-    if res = 0 then exit;
+  fdsin: tfdSet;
     {$EndIf}
-    end;
-    //-----  store old settings -----------
-    TCGetAttr(StdInputHandle, org_opts);
-    //---- set new terminal parms --------
-    Move(org_opts, new_opts, sizeof(new_opts));
-    new_opts.c_lflag := new_opts.c_lflag or not (ICANON or ECHO or
-      ECHOE or ECHOK or ECHONL or ECHOPRT or ECHOKE or ICRNL);
-    //new_opts.c_lflag := new_opts.c_lflag And not ICANON;
-    TCSetAttr(StdInputHandle, TCSANOW, new_opts);
-    res := FpRead(StdInputHandle, Result, 1);
-    if res = 0 then Result:=#0;
-
-    //------  restore old settings ---------
-    TCSetAttr(StdInputHandle, TCSANOW, org_opts);
+  res: integer;
+begin
+  res := 1;
+  Result := #0;
+  TCGetAttr(1, oTIO);
+  nTIO := oTIO;
+  CFMakeRaw(nTIO);
+  TCSetAttr(1, TCSANOW, nTIO);
+  if not Blocking then
+  begin
     {$ifDef NonBlockingStdIn}
-    if not Blocking then
-    FpFcntl(StdInputHandle, F_SetFl, flags);
+    flags := FpFcntl(StdInputHandle, F_GetFl, 0);
+    FpFcntl(StdInputHandle, F_SetFl, flags or O_NONBLOCK);
+    {$Else}
+    fpFD_ZERO(fdsin);
+    fpFD_SET(StdInputHandle, fdsin);
+    res := fpSelect(StdInputHandle + 1, @fdsin, nil, nil, 0);
     {$EndIf}
   end;
+  if res > 0 then
+    res := FpRead(StdInputHandle, Result, 1);
+
+  {$ifDef NonBlockingStdIn}
+  if res = 0 then
+    Result := #0;
+  {$EndIf}
+
+  //restore settings
+  TCSetAttr(1, TCSANOW, oTIO);
+  {$ifDef NonBlockingStdIn}
+  if not Blocking then
+    FpFcntl(StdInputHandle, F_SetFl, flags);
+  {$EndIf}
+end;
+
 {$Else}
 
-   // found at http://www.cplusplus.com/forum/articles/19975/
-  function ReadChar(Blocking: Boolean = True): Char;
-  var
-    hstdin: HANDLE;
-    irInputRecord: INPUT_RECORD;
-    dwEventsRead: DWORD;
-    r: DWORD;
-  begin
-    hStdin := GetStdHandle(STD_INPUT_HANDLE);
-    GetNumberOfConsoleInputEvents(hstdin, r);
-    if Blocking or (r>0) then
+// found at http://www.cplusplus.com/forum/articles/19975/
+function ReadChar(Blocking: boolean = True): char;
+var
+  hstdin: HANDLE;
+  irInputRecord: INPUT_RECORD;
+  dwEventsRead: DWORD;
+  r: DWORD;
+begin
+  hStdin := GetStdHandle(STD_INPUT_HANDLE);
+  GetNumberOfConsoleInputEvents(hstdin, r);
+  if Blocking or (r > 0) then
     while ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead) do
       if (irInputRecord.EventType = KEY_EVENT) and
         (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_SHIFT) and
@@ -173,62 +180,65 @@ implementation
         ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead);
         Exit;
       end
-      else if not Blocking then break;
-    Result := #0;
-  end;
+      else if not Blocking then
+        break;
+  Result := #0;
+end;
 
 {$EndIf}
 
 function MergeColor(A, B: TColor): TColor;
   {$IfDef Col8}
-var ra,ga,ba, rb,gb,bb: Integer;
+var
+  ra, ga, ba, rb, gb, bb: integer;
   {$EndIf}
 begin
   {$IfDef Col24}
   case B.Opc of
-    0: Result:=A;
+    0: Result := A;
     1..99:
-  begin
-    Result.Opc:=100;
-    Result.R:=trunc((A.R/100)*(100-B.Opc)+(B.R/100)*B.Opc);
-    Result.G:=trunc((A.G/100)*(100-B.Opc)+(B.G/100)*B.Opc);
-    Result.B:=trunc((A.B/100)*(100-B.Opc)+(B.B/100)*B.Opc);
-  end;
-  else
-    Result:=B;
+    begin
+      Result.Opc := 100;
+      Result.R := trunc((A.R / 100) * (100 - B.Opc) + (B.R / 100) * B.Opc);
+      Result.G := trunc((A.G / 100) * (100 - B.Opc) + (B.G / 100) * B.Opc);
+      Result.B := trunc((A.B / 100) * (100 - B.Opc) + (B.B / 100) * B.Opc);
+    end;
+    else
+      Result := B;
   end;
   {$Else}
   {$IfDef Col8}
   case B.Opc of
-    0: Result:=A;
+    0: Result := A;
     1..99:
-  begin
-    Result.Opc:=100;
-    case b.Col of
-    16..231:
-      begin
-        ra:=(a.Col-16) div 36;
-        ga:=(a.Col-16) mod 36 div 6;
-        ba:=(a.Col-16) mod 6;
+    begin
+      Result.Opc := 100;
+      case b.Col of
+        16..231:
+        begin
+          ra := (a.Col - 16) div 36;
+          ga := (a.Col - 16) mod 36 div 6;
+          ba := (a.Col - 16) mod 6;
 
-        rb:=(b.Col-16) div 36;
-        gb:=(b.Col-16) mod 36 div 6;
-        bb:=(b.Col-16) mod 6;
+          rb := (b.Col - 16) div 36;
+          gb := (b.Col - 16) mod 36 div 6;
+          bb := (b.Col - 16) mod 6;
 
-        Ra:=trunc((Ra/100)*(100-B.Opc)+(Rb/100)*B.Opc);
-        Ga:=trunc((Ga/100)*(100-B.Opc)+(gb/100)*B.Opc);
-        Ba:=trunc((Ba/100)*(100-B.Opc)+(Bb/100)*B.Opc);
-        Result.Col:=16*36*ra+6*ga+ba;
+          Ra := trunc((Ra / 100) * (100 - B.Opc) + (Rb / 100) * B.Opc);
+          Ga := trunc((Ga / 100) * (100 - B.Opc) + (gb / 100) * B.Opc);
+          Ba := trunc((Ba / 100) * (100 - B.Opc) + (Bb / 100) * B.Opc);
+          Result.Col := 16 * 36 * ra + 6 * ga + ba;
+        end;
+        232..255: Result.Col := trunc(((A.Col - 232) / 100) * (100 - B.Opc) +
+            ((B.Col - 232) / 100) * B.Opc) + 232;
+        else
+        begin
+          Result.Col := ifthen(b.Opc >= 50, b.Col, a.Col);
+        end;
       end;
-      232..255: Result.Col:=trunc(((A.Col - 232)/100)*(100-B.Opc)+((B.Col - 232)/100)*B.Opc)+232;
-      else
-      begin
-        Result.Col:=ifthen(b.Opc>=50, b.Col, a.Col);
-      end;
-    end;
-  end
-  else
-    Result:=B;
+    end
+    else
+      Result := B;
   end;
   {$Else}
   if B < 16 then
@@ -240,53 +250,53 @@ begin
 end;
 
 
-function LCLColToCanvasColor(Col: Cardinal): TColor;
+function LCLColToCanvasColor(Col: cardinal): TColor;
 type
   TLazColor = record
-    case Boolean of
-    True: (Color: Integer);
+    case boolean of
+      True: (Color: integer);
     {$IfDef ENDIAN_LITTLE}
-    False: (Opc, R, G, B: Byte);
+      False: (Opc, R, G, B: byte);
     {$Else}
-    False: (B, G, R, Opc: Byte);
+      False: (B, G, R, Opc: byte);
     {$EndIf}
-end;
-var lc: TLazColor;
+  end;
+var
+  lc: TLazColor;
 begin
   lc.Color := Col;
   Result := RGB(lc.R, lc.G, lc.B);
 end;
 
 {$If defined(Col4) or defined(COL8)}
-function CompareColors(A, B: Cardinal): Integer;
-var C1, C2: TColor24;
+function CompareColors(A, B: cardinal): integer;
+var
+  C1, C2: TColor24;
 begin
-  C1.Color:=A;
-  C2.Color:=B;
-  Result:=abs(C1.R-C2.R)+abs(C1.G-C2.G)+abs(C1.B-C2.B);
+  C1.Color := A;
+  C2.Color := B;
+  Result := abs(C1.R - C2.R) + abs(C1.G - C2.G) + abs(C1.B - C2.B);
 end;
 
-function FindTableIndex(C: Cardinal; StartIndex: Integer = 0): Integer;
+function FindTableIndex(C: cardinal; StartIndex: integer = 0): integer;
 const
-  TableMax =
   {$IfDef Col4}
-    15
+  TableMax = 15;
   {$else}
-    255
-  {$EndIf};
-var i,
-  cmp,
-  MinDiff: Integer;
+  TableMax = 255;
+  {$EndIf}
+var
+  i, cmp, MinDiff: integer;
 begin
-  Result:=StartIndex;
-  MinDiff:=High(Integer);
-  for i:=StartIndex to TableMax do
+  Result := StartIndex;
+  MinDiff := High(integer);
+  for i := StartIndex to TableMax do
   begin
-    cmp:=CompareColors(C, ColTable[i]);
-    if cmp<MinDiff then
+    cmp := CompareColors(C, ColTable[i]);
+    if cmp < MinDiff then
     begin
-      Result:=i;
-      MinDiff:=cmp;
+      Result := i;
+      MinDiff := cmp;
     end;
   end;
 end;
@@ -305,18 +315,18 @@ begin
   Result.G := G;
   Result.B := B;
   {$Else}
-  Ref.R:=R;
-  Ref.G:=G;
-  Ref.B:=B;
-  Ref.Opc:=0;
+  Ref.R := R;
+  Ref.G := G;
+  Ref.B := B;
+  Ref.Opc := 0;
   {$IfDef COL8}
-  Result.Opc:=100;
-  if (R=B) and (B=G) then // grayscale
-    Result.Col:=FindTableIndex(Ref.Color, 232)
+  Result.Opc := 100;
+  if (R = B) and (B = G) then // grayscale
+    Result.Col := FindTableIndex(Ref.Color, 232)
   else
-    Result.Col:=16+round(R/255*5)*36+round(G/255*5)*6+round(B/255*5);
-  {$Else} // Col4
-  Result:=FindTableIndex(Ref.Color);
+    Result.Col := 16 + round(R / 255 * 5) * 36 + round(G / 255 * 5) * 6 + round(B / 255 * 5);
+  {$Else}// Col4
+  Result := FindTableIndex(Ref.Color);
   {$EndIf}
   {$EndIf}
 end;
@@ -349,27 +359,31 @@ end;
 procedure SetCursorVisibility(Visible: boolean);
 begin
   if Visible then
+  begin
   {$IfDef AnsiEscape}
-  Write(#27'[?25h')
+    Write(#27'[?25h');
   {$Else}
-    cursoron
+    cursoron;
   {$EndIf}
+  end
   else
   {$IfDef AnsiEscape}
-  Write(#27'[?25l');
+    Write(#27'[?25l');
   {$Else}
-    cursoroff;
+  cursoroff;
   {$EndIf}
 end;
 
   {$IfDef UNIX}
 function GetWindowSize: TWindowSize;
-var sz: TWinSize;
+var
+  sz: TWinSize;
 begin
   FpIOCtl(StdOutputHandle, TIOCGWINSZ, @sz);
-  Result.Width:=sz.ws_col;
-  Result.Height:=sz.ws_row;
+  Result.Width := sz.ws_col;
+  Result.Height := sz.ws_row;
 end;
+
   {$Else}
 
 function GetWindowSize: TWindowSize;
@@ -413,85 +427,91 @@ end;
 
 {$IfDef AnsiEscape}
 
-procedure TTextCanvas.PrintLine(y: Integer);
+procedure TTextCanvas.PrintLine(y: integer);
 // Buffer Array type
-type TCharBuffer = array [0..MaxBuffSize - 1] of Char;
+type
+  TCharBuffer = array [0..MaxBuffSize - 1] of char;
 
-// Flush buffer to STDOut
-procedure FlushBuffer(Buff: TCharBuffer; Len: Integer);
-var outstr:String;
-begin
-  if Len = 0 then Exit;
-  SetLength(outstr, Len);
-  Move(Buff[Low(Buff)], outstr[1], Len);
-  Write(outstr);
-end;
-
-// Write string into buffer, flush if full
-procedure WriteBuffer(var Buff: TCharBuffer; const Value: String; var pos: Integer);
-var i: Integer;
-begin
-  for i:=1 to Length(Value) do
+  // Flush buffer to STDOut
+  procedure FlushBuffer(Buff: TCharBuffer; Len: integer);
+  var
+    outstr: string;
   begin
-    // Write char by char
-    Buff[pos]:=Value[i];
-    inc(pos);
-    // on full buffer flush to stdOut
-    if pos>High(Buff) then
+    if Len = 0 then
+      Exit;
+    SetLength(outstr, Len);
+    Move(Buff[Low(Buff)], outstr[1], Len);
+    Write(outstr);
+  end;
+
+  // Write string into buffer, flush if full
+  procedure WriteBuffer(var Buff: TCharBuffer; const Value: string; var pos: integer);
+  var
+    i: integer;
+  begin
+    for i := 1 to Length(Value) do
     begin
-      pos:=Low(Buff);
-      FlushBuffer(Buff, Length(Buff));
+      // Write char by char
+      Buff[pos] := Value[i];
+      Inc(pos);
+      // on full buffer flush to stdOut
+      if pos > High(Buff) then
+      begin
+        pos := Low(Buff);
+        FlushBuffer(Buff, Length(Buff));
+      end;
     end;
   end;
-end;
 
-// Get the string to change the color
-function GetColorString(Color: TPrintColor): String;
-var FG, BG: String;
-begin
-  // Background
-  with Color.Background do
-    if Opc=ResetBGColor.Opc then // check if reset
-      BG := #27'[49m'
-    else
-      BG :=
+  // Get the string to change the color
+  function GetColorString(Color: TPrintColor): string;
+  var
+    FG, BG: string;
+  begin
+    // Background
+    with Color.Background do
+      if Opc = ResetBGColor.Opc then // check if reset
+        BG := #27'[49m'
+      else
+        BG :=
       {$IfDef Col24}
-        Format(#27'[48;2;%d;%d;%dm',[R, G, B]);
+          Format(#27'[48;2;%d;%d;%dm', [R, G, B]);
       {$Else}
-        Format(#27'[48;5;%dm',[Col]);
+    Format(#27'[48;5;%dm', [Col]);
       {$EndIf}
 
 
-  // Foreground
-  with Color.Foreground do
-    if Opc=ResetFGColor.Opc then
-      FG := #27'[39m'
-    else
-      FG :=
+    // Foreground
+    with Color.Foreground do
+      if Opc = ResetFGColor.Opc then
+        FG := #27'[39m'
+      else
+        FG :=
       {$IfDef Col24}
-        Format(#27'[38;2;%d;%d;%dm',[R, G, B]);
+          Format(#27'[38;2;%d;%d;%dm', [R, G, B]);
       {$Else}
-        Format(#27'[38;5;%dm',[Col]);
+    Format(#27'[38;5;%dm', [Col]);
       {$EndIf}
 
-  Result:=FG+BG;
-end;
+    Result := FG + BG;
+  end;
 
-var Buff: TCharBuffer;
-  c, x: Integer;
+var
+  Buff: TCharBuffer;
+  c, x: integer;
 begin
-  c:=Low(TCharBuffer);
+  c := Low(TCharBuffer);
   FillChar(Buff, Length(Buff), ' ');
   MoveCursor(1, y + 1);
-  for x:=0 to FWidth-1 do
+  for x := 0 to FWidth - 1 do
   begin
-    WriteBuffer(Buff, GetColorString(Obj[x,y].Color), c);
-    WriteBuffer(Buff, Obj[x,y].Value, c);
+    WriteBuffer(Buff, GetColorString(Obj[x, y].Color), c);
+    WriteBuffer(Buff, Obj[x, y].Value, c);
   end;
   // Flush Buffer
-  FlushBuffer(Buff,c-Low(Buff));
+  FlushBuffer(Buff, c - Low(Buff));
   WriteLn('');
-  FGraphic[y].Changed:=False;
+  FGraphic[y].Changed := False;
 end;
 
 {$Else}
