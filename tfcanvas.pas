@@ -1,22 +1,3 @@
-{ TextCanvas, Textmode graphic library
-
-  Copyright (C) 2016 Frederic Kehrein frederic@kehrein.org
-
-  This library is free software; you can redistribute it and/or modify it
-  under the terms of the GNU Library General Public License as published by
-  the Free Software Foundation; either version 2 of the License, or (at your
-  option) any later version.
-
-  This program is distributed in the hope that it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE. See the GNU Library General Public License
-  for more details.
-
-  You should have received a copy of the GNU Library General Public License
-  along with this library; if not, write to the Free Software Foundation,
-  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-}
-
 { TODO : Utf-8 Support }
 unit TFCanvas;
 
@@ -75,6 +56,10 @@ type
     property Obj[x, y: integer]: TPrintObject read GetObj write SetObj; default;
   end;
 
+
+type
+  TArrowKey = (akNone, akLeft, akUp, akDown, akRight);
+
 const
   {$IfDef Col24}
   Transparency: TColor = (Color: $00000000);
@@ -102,6 +87,8 @@ function GetWindowSize: TWindowSize;
 // Reads a char without the need of enter
 function ReadChar(Blocking: boolean = True): char;
 function LCLColToCanvasColor(Col: cardinal): TColor;
+function GetArrow(seq: String): TArrowKey;    
+function ReadSequence(Blocking: Boolean = True): String;
 
 {$If defined(COL8) or defined(Col4)}
 function FindTableIndex(C: cardinal; StartIndex: integer = 0): integer;
@@ -111,6 +98,59 @@ const
 {$EndIf}
 
 implementation
+
+function GetArrow(seq: String): TArrowKey;
+begin
+  Result:=akNone;
+  case seq[1] of
+  {$IfDef UNIX}
+  #27:
+   begin
+     if seq.length=3 then
+       case seq[3] of
+       'A': Result:=akUp;
+       'B': Result:=akDown;
+       'C': Result:=akRight;
+       'D': Result:=akLeft;
+       end;
+   end;
+  {$Else}
+  #4: Result:=akLeft;
+  #5: Result:=akUp;
+  #6: Result:=akRight;
+  #7: Result:=akDown;
+  {$EndIf}
+  end;
+end;
+
+function ReadSequence(Blocking: Boolean = True): String;
+var c: Char;
+  l: Integer;
+begin
+  {$IfDef WINDOWS}
+  Result:=ReadChar(Blocking);
+  {$Else}
+  SetLength(Result, 1);
+  Result[1]:=ReadChar(Blocking);
+  if Result[1] = #0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end
+  else if Result[1] <> #27 then exit;
+  l:=1;
+  repeat
+    c:=ReadChar(False);
+    if c>#0 then
+    begin 
+      inc(l);
+      if l>Result.Length then SetLength(Result, Result.Length*2);
+      Result[l] := c;
+    end;
+  until c = #0;
+  SetLength(Result, l);
+  {$EndIf}
+end;
 
 {$IfDef UNIX}
 
@@ -176,7 +216,11 @@ begin
         (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_MENU) and
         (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_CONTROL) then
       begin
-        Result := irInputRecord.Event.KeyEvent.AsciiChar;
+        if (irInputRecord.Event.KeyEvent.wVirtualKeyCode >=37) and
+          (irInputRecord.Event.KeyEvent.wVirtualKeyCode <=40) then
+           Result:=char(irInputRecord.Event.KeyEvent.wVirtualKeyCode-33)
+        else
+          Result := irInputRecord.Event.KeyEvent.AsciiChar;
         ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead);
         Exit;
       end
@@ -275,7 +319,7 @@ var
 begin
   C1.Color := A;
   C2.Color := B;
-  Result := abs(C1.R - C2.R) + abs(C1.G - C2.G) + abs(C1.B - C2.B);
+  Result := (C1.R - C2.R)**2 + (C1.G - C2.G)**2 + (C1.B - C2.B)**2;
 end;
 
 function FindTableIndex(C: cardinal; StartIndex: integer = 0): integer;
@@ -315,9 +359,9 @@ begin
   Result.G := G;
   Result.B := B;
   {$Else}
-  Ref.R := R;
+  Ref.R := {$IfDef COL4}B {$Else}R{$EndIf};
   Ref.G := G;
-  Ref.B := B;
+  Ref.B := {$IfDef COL4}R {$Else}B{$EndIf};
   Ref.Opc := 0;
   {$IfDef COL8}
   Result.Opc := 100;
@@ -420,8 +464,7 @@ begin
   FGraphic[Y].Line[X].Color.Background :=
     MergeColor(FGraphic[Y].Line[X].Color.Background, Obj.Color.Background);
 
-  if Obj.Value <> ' ' then
-    FGraphic[Y].Line[X].Value := Obj.Value;
+  FGraphic[Y].Line[X].Value := Obj.Value;
 end;
 
 
@@ -518,16 +561,31 @@ end;
 
 procedure TTextCanvas.PrintLine(y: integer);
 var
-  x: integer;
+  x, len: integer;
+  str: String;
+  fg,bg: TColor;
 begin
   GotoXY(1, y + 1);
-  for x := 0 to Width - 1 do
+  x:=0;
+  while x < Width do
   begin
-    if Obj[x, y].Color.Foreground < Transparency then
-      TextColor(Obj[x, y].Color.Foreground);
-    if Obj[x, y].Color.Background < Transparency then
-      TextBackground(Obj[x, y].Color.Background);
-    Write(Obj[x, y].Value);
+    SetLength(str, Width);
+    len:=0;
+    fg:=Obj[x, y].Color.Foreground;
+    bg:=Obj[x, y].Color.Background;
+    while (Obj[x+len,y].Color.Foreground = fg) And
+          (Obj[x+len,y].Color.Background = bg) do
+    begin
+      str[len+1] := Obj[x+len,y].Value;
+      inc(len);
+    end;
+    SetLength(str,len);
+    if fg < Transparency then
+      TextColor(fg);
+    if bg < Transparency then
+      TextBackground(bg);
+    Write(str);
+    Inc(x, len);
   end;
   WriteLn('');
   FGraphic[y].Changed := False;

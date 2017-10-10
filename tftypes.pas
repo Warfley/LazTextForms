@@ -7,19 +7,9 @@ unit TFTypes;
 interface
 
 uses
-  Classes, SysUtils, LinkedQueue;
+  Classes, SysUtils;
 
 type
-
-  TEventMethod = procedure (Data: PtrInt) of object;
-
-  TEventInformation = record
-    Method: TEventMethod;
-    Data: PtrInt;
-  end;
-
-  TEventQueue = specialize TLinkedQueue<TEventInformation>;
-
   TWindowSize = record
     Width, Height: Integer;
   end;
@@ -73,7 +63,20 @@ type
 
   TPrintMap = array of TPrintLine;
 
+    operator =(a,b: TColor24): Boolean;
+    operator =(a,b: TColor8): Boolean;
+
 implementation
+
+operator=(a, b: TColor24): Boolean;
+begin
+  result:=a.Color=b.Color;
+end;
+
+operator=(a, b: TColor8): Boolean;
+begin
+  result:=a.Color=b.Color;
+end;
 
 end.
 
