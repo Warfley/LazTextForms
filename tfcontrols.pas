@@ -278,10 +278,10 @@ begin
   repeat 
     f:=forceUpdate;
     forceUpdate:=False;
-    ws:=GetWindowSize;
+    ws:=GetWindowSize;    
+    {$IfDef WINDOWS}ws.Height:=Min(30, ws.Height-1){$EndIf};
     if (ws.Width<>Width) or (ws.Height<>Height + HighDiff) or forceUpdate then
-    begin   
-      {$IfDef WINDOWS}ws.Height:=Min(30, ws.Height-1){$EndIf};
+    begin
       FCanvas.Resize(ws.Width, ws.Height-HighDiff);
       FHeight:=ws.Height-HighDiff;
       FWidth:=ws.Width; 
