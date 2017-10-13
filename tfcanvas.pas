@@ -103,9 +103,7 @@ function GetArrow(seq: String): TArrowKey;
 begin
   Result:=akNone;
   case seq[1] of
-  {$IfDef UNIX}
   #27:
-   begin
      if seq.length=3 then
        case seq[3] of
        'A': Result:=akUp;
@@ -113,13 +111,6 @@ begin
        'C': Result:=akRight;
        'D': Result:=akLeft;
        end;
-   end;
-  {$Else}
-  #4: Result:=akLeft;
-  #5: Result:=akUp;
-  #6: Result:=akRight;
-  #7: Result:=akDown;
-  {$EndIf}
   end;
 end;
 
@@ -127,9 +118,6 @@ function ReadSequence(Blocking: Boolean = True): String;
 var c: Char;
   l: Integer;
 begin
-  {$IfDef WINDOWS}
-  Result:=ReadChar(Blocking);
-  {$Else}
   SetLength(Result, 1);
   Result[1]:=ReadChar(Blocking);
   if Result[1] = #0 then
@@ -149,7 +137,6 @@ begin
     end;
   until c = #0;
   SetLength(Result, l);
-  {$EndIf}
 end;
 
 {$IfDef UNIX}
@@ -199,33 +186,62 @@ end;
 
 {$Else}
 
+var NextChars: String;
+
 // found at http://www.cplusplus.com/forum/articles/19975/
 function ReadChar(Blocking: boolean = True): char;
 var
-  hstdin: HANDLE;
-  irInputRecord: INPUT_RECORD;
-  dwEventsRead: DWORD;
-  r: DWORD;
+  STDInHandle: HANDLE;
+  ConsoleInput: INPUT_RECORD;
+  RecordCount: Cardinal;
 begin
-  hStdin := GetStdHandle(STD_INPUT_HANDLE);
-  GetNumberOfConsoleInputEvents(hstdin, r);
-  if Blocking or (r > 0) then
-    while ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead) do
-      if (irInputRecord.EventType = KEY_EVENT) and
-        (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_SHIFT) and
-        (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_MENU) and
-        (irInputRecord.Event.KeyEvent.wVirtualKeyCode <> VK_CONTROL) then
+  if NextChars.Length>0 then
+  begin
+    Result:=NextChars.Chars[0];
+    NextChars:=NextChars.Substring(1);
+    Exit;
+  end;
+  STDInHandle := GetStdHandle(STD_INPUT_HANDLE);
+  GetNumberOfConsoleInputEvents(STDInHandle, RecordCount);
+  if Blocking or (RecordCount > 0) then
+    while ReadConsoleInputA(STDInHandle, ConsoleInput, 1, RecordCount) do
+      if (ConsoleInput.EventType = KEY_EVENT) and
+        (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <> VK_SHIFT) and
+        (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <> VK_MENU) and
+        (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <> VK_CONTROL) and
+        (ConsoleInput.Event.KeyEvent.bKeyDown) then
       begin
-        if (irInputRecord.Event.KeyEvent.wVirtualKeyCode >=37) and
-          (irInputRecord.Event.KeyEvent.wVirtualKeyCode <=40) then
-           Result:=char(irInputRecord.Event.KeyEvent.wVirtualKeyCode-33)
-        else
-          Result := irInputRecord.Event.KeyEvent.AsciiChar;
-        ReadConsoleInputA(hStdin, irInputRecord, 1, dwEventsRead);
+        case ConsoleInput.Event.KeyEvent.AsciiChar of
+        #8, #13, #32..#254: Result := ConsoleInput.Event.KeyEvent.AsciiChar;
+        #9:
+        begin
+          if ConsoleInput.Event.KeyEvent.dwControlKeyState and $0010 = $0010 then
+          begin
+            NextChars:='[Z';
+            Result:=#27;
+          end
+          else
+            Result:=#9
+        end;
+        #0:
+        begin
+          // Arrows
+          SetLength(NextChars, 2);
+          NextChars[1] := '[';
+          case ConsoleInput.Event.KeyEvent.wVirtualKeyCode of
+          $25: NextChars[2] := 'D';
+          $26: NextChars[2] := 'A';
+          $27: NextChars[2] := 'C';
+          $28: NextChars[2] := 'B';
+          end;
+          Result:=#27;
+        end;
+        end;
         Exit;
       end
-      else if not Blocking then
-        break;
+      else
+        if not Blocking then
+          break;
   Result := #0;
 end;
 
@@ -830,5 +846,10 @@ begin
   MoveCursor(FWidth, FHeight);
   WriteLn('');
 end;
+
+initialization
+  {$IfDef WINDOWS}
+  NextChars:='';
+  {$EndIf}
 
 end.
