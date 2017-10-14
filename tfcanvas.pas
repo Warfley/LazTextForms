@@ -215,7 +215,18 @@ begin
         (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <> VK_CONTROL) and
         (ConsoleInput.Event.KeyEvent.bKeyDown) then
       begin
-        if (ConsoleInput.Event.KeyEvent.wVirtualKeyCode >= VK_F1) and
+        if (ConsoleInput.Event.KeyEvent.wVirtualKeyCode >= VK_PRIOR) and
+          (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <= VK_HOME) then
+        begin
+          case ConsoleInput.Event.KeyEvent.wVirtualKeyCode of
+            VK_HOME: NextChars := '[H';
+            VK_END: NextChars := '[F';
+            VK_PRIOR: NextChars := '[5~';
+            VK_NEXT: NextChars := '[6~';
+          end;
+          Result := #27;
+        end
+        else if (ConsoleInput.Event.KeyEvent.wVirtualKeyCode >= VK_F1) and
           (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <= VK_F12) then
         begin
           case ConsoleInput.Event.KeyEvent.wVirtualKeyCode of   // F-Keys
@@ -245,7 +256,7 @@ begin
         end
         else
           case ConsoleInput.Event.KeyEvent.AsciiChar of
-            #8, #13, #32..#254:
+            #8, #27, #13, #32..#254:
               if ConsoleInput.Event.KeyEvent.dwControlKeyState and $2 = $2 then
               begin
                 NextChars := ConsoleInput.Event.KeyEvent.AsciiChar;
