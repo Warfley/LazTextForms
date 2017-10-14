@@ -80,6 +80,7 @@ type
     procedure Resize; virtual;
     procedure ColorChange; virtual;
     procedure PositionChanged; virtual;
+    procedure Invalidate; virtual;
   public
     constructor Create(AParent: TTextForm);virtual;
     destructor Destroy; override;
@@ -108,6 +109,7 @@ type
     FOnEnter: TNotifyEvent;
     FOnLeave: TNotifyEvent;
     FOnInput: TInputEvent;
+    FOnGlobalInput: TInputEvent;
     procedure SetFBG(AValue: TColor);
     procedure SetFFG(AValue: TColor);
     procedure SetFocused(AValue: Boolean);
@@ -116,12 +118,14 @@ type
     procedure FocusChanged; virtual;
   public
     function ProcessInput(inp: String): Boolean; virtual;
+    function ProcessInputGlobal(inp: String): Boolean; virtual;
     property Focused: Boolean read FFocused write SetFocused;
     property FocusedForeground: TColor read FFocusedFG write SetFFG;
     property FocusedBackground: TColor read FFocusedBG write SetFBG;
     property OnEnter: TNotifyEvent read FOnEnter write FOnEnter;
     property OnLeave: TNotifyEvent read FOnLeave write FOnLeave;
     property OnInput: TInputEvent read FOnInput write FOnInput;
+    property OnGlobalInput: TInputEvent read FOnGlobalInput write FOnGlobalInput;
   end;
 
   { TTFListBox }
@@ -298,10 +302,19 @@ begin
     {$IfDef UNIX}if inp= #3 then raise ESignalInterrupt.Create('Control+c hit'); {$EndIf}
     f:=False;
     if FUserControls.Count>0 then
+    begin
       if FUserControls[FTabPosition].ProcessInput(inp) then
       begin
         inp:='';
         f:=True;
+      end;
+      if not f then
+        for i:=0 to FUserControls.Count-1 do
+          if FUserControls[i].ProcessInputGlobal(inp) then
+          begin
+            f:=True;
+            Break;
+          end;
       end;
     if not f then ProcessInput(inp)
   until Closed;
@@ -417,6 +430,13 @@ begin
     FOnInput(Self, inp, Result);
 end;
 
+function TUserControl.ProcessInputGlobal(inp: String): Boolean;
+begin
+  Result:=False;
+  if Assigned(FOnGlobalInput) then
+    FOnGlobalInput(Self, inp, Result);
+end;
+
 { TTextControl }
 
 procedure TTextControl.SetBG(AValue: TColor);
@@ -513,6 +533,11 @@ procedure TTextControl.PositionChanged;
 begin
   if Assigned(FOnChangeBounds) then
     FOnChangeBounds(Self);
+end;
+
+procedure TTextControl.Invalidate;
+begin
+  FChanged:=True;
 end;
 
 constructor TTextControl.Create(AParent: TTextForm);

@@ -104,6 +104,8 @@ begin
   TestEdit.OnEnterKey := @EditEnterPressed;
 
   TestButton := TTFButton.Create(self);
+  TestButton.Caption:='Click';
+  TestButton.ShortCut:='c';
   TestButton.OnClick := @ButtonClicked;
 end;
 

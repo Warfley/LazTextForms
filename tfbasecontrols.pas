@@ -93,16 +93,23 @@ type
     FOnClick: TNotifyEvent;
     FCaption: string;
     FAlign: TAlign;
+    FHighlightColor: TColor;
+    FShortCut: char;
     procedure SetAlign(AValue: TAlign);
     procedure SetCaption(AValue: string);
+    procedure SetHighlightColor(AValue: TColor);
+    procedure SetShortCut(AValue: char);
   protected
     procedure Draw(ACanvas: TTextCanvas); override;
   public
     function ProcessInput(inp: string): boolean; override;
+    function ProcessInputGlobal(inp: string): boolean; override;
     constructor Create(AParent: TTextForm); override;
     property OnClick: TNotifyEvent read FOnClick write FOnClick;
     property Caption: string read FCaption write SetCaption;
     property Align: TAlign read FAlign write SetAlign;
+    property HighlightColor: TColor read FHighlightColor write SetHighlightColor;
+    property ShortCut: char read FShortCut write SetShortCut;
   end;
 
 
@@ -115,7 +122,7 @@ begin
   if FAlign = AValue then
     Exit;
   FAlign := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFCheckBox.setAutoSize(AValue: boolean);
@@ -123,7 +130,7 @@ begin
   if FAutoSize = AValue then
     Exit;
   FAutoSize := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFCheckBox.setChecked(AValue: boolean);
@@ -131,14 +138,14 @@ begin
   if FChecked = AValue then
     Exit;
   FChecked := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFCheckBox.TextChanged(Sender: TObject);
 var
   s: string;
 begin
-  FChanged := True;
+  Invalidate;
   if AutoSize then
   begin
     Height := Max(1, Text.Count);
@@ -177,7 +184,8 @@ begin
   if Result then
   begin
     Checked := not Checked;
-    if Assigned(FOnChange) then FOnChange(Self);
+    if Assigned(FOnChange) then
+      FOnChange(Self);
   end;
   if not Result then
     Result := inherited ProcessInput(inp);
@@ -209,7 +217,7 @@ begin
   if FAlign = AValue then
     Exit;
   FAlign := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFButton.SetCaption(AValue: string);
@@ -217,21 +225,62 @@ begin
   if FCaption = AValue then
     Exit;
   FCaption := AValue;
-  FChanged := True;
+  Invalidate;
+end;
+
+procedure TTFButton.SetHighlightColor(AValue: TColor);
+begin
+  if FHighlightColor = AValue then
+    Exit;
+  FHighlightColor := AValue;
+  Invalidate;
+end;
+
+procedure TTFButton.SetShortCut(AValue: char);
+begin
+  if FShortCut = AValue then
+    Exit;
+  FShortCut := AValue;
+  Invalidate;
 end;
 
 procedure TTFButton.Draw(ACanvas: TTextCanvas);
+var
+  str, s, e: string;
+  l: integer;
+  p: IntPtr;
 begin
   inherited Draw(ACanvas);
-  case Align of
-    alLeft:
-      ACanvas.TextOut(Left, Top + (Height div 2), FCaption.Substring(0, Width));
-    alRight:
-      ACanvas.TextOut(Left + Width - FCaption.Substring(0, Width).Length,
-        Top + (Height div 2), FCaption.Substring(0, Width));
-    alCenter:
-      ACanvas.TextOut(Left + ((Width - FCaption.Substring(0, Width).Length) div 2),
-        Top + (Height div 2), FCaption.Substring(0, Width));
+  str := FCaption.Substring(0, Width);
+  p := Pos(lowerCase(FShortCut), str.ToLower);
+  if p < 1 then
+    case Align of
+      alLeft:
+        ACanvas.TextOut(Left, Top + (Height div 2), str);
+      alRight:
+        ACanvas.TextOut(Left + Width - str.Length,
+          Top + (Height div 2), str);
+      alCenter:
+        ACanvas.TextOut(Left + ((Width - str.Length) div 2),
+          Top + (Height div 2), str);
+    end
+  else
+  begin
+    s := str.Substring(0, p - 1);
+    e := str.Substring(p);
+    case Align of
+      alLeft:
+        l := Left + Width - str.Length;
+      alRight:
+        l := Left + Width - str.Length;
+      alCenter:
+        l := Left + ((Width - str.Length) div 2);
+    end;
+    ACanvas.TextOut(l, Top + (Height div 2), s);
+    ACanvas.SetColor(FHighlightColor, Transparency);
+    ACanvas.TextOut(l + s.Length, Top + (Height div 2), str[p]);
+    ACanvas.SetColor(Foreground, Transparency);
+    ACanvas.TextOut(l + s.Length + 1, Top + (Height div 2), e);
   end;
 end;
 
@@ -244,6 +293,15 @@ begin
     Result := inherited ProcessInput(inp);
 end;
 
+function TTFButton.ProcessInputGlobal(inp: string): boolean;
+begin
+  Result := inp = #27 + FShortCut;
+  if Result and Assigned(FOnClick) then
+    FOnClick(Self)
+  else if not Result then
+    Result := inherited ProcessInputGlobal(inp);
+end;
+
 constructor TTFButton.Create(AParent: TTextForm);
 begin
   inherited Create(AParent);
@@ -253,7 +311,9 @@ begin
   Background := RGB(200, 200, 200);
   FocusedBackground := RGB(255, 0, 0);
   FocusedForeground := RGB(255, 255, 255);
-  Align:=alCenter;
+  Align := alCenter;
+  FShortCut := #0;
+  FHighlightColor := RGB(255, 255, 0);
   Caption := 'Click me';
 end;
 
@@ -264,7 +324,7 @@ begin
   if FAlign = AValue then
     Exit;
   FAlign := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFEdit.SetCursorColor(AValue: TColor);
@@ -272,7 +332,7 @@ begin
   if FCursorColor = AValue then
     Exit;
   FCursorColor := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFEdit.SetPosition(AValue: integer);
@@ -280,7 +340,7 @@ begin
   if FCursorPos = AValue then
     Exit;
   FCursorPos := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFEdit.SetText(AValue: string);
@@ -288,7 +348,7 @@ begin
   if FText = AValue then
     Exit;
   FText := AValue;
-  FChanged := True;
+  Invalidate;
   if FText.Length < FCursorPos then
     FCursorPos := FText.Length;
 end;
@@ -348,7 +408,7 @@ begin
           // FText because of FCursorPos
           FText := FText.Substring(0, FCursorPos - 1) + FText.Substring(FCursorPos);
           FCursorPos := Max(0, FCursorPos - 1);
-          FChanged := True;
+          Invalidate;
           if Assigned(FOnChange) then
             FOnChange(Self);
         end;
@@ -401,14 +461,14 @@ begin
   if FAlign = AValue then
     Exit;
   FAlign := AValue;
-  FChanged := True;
+  Invalidate;
 end;
 
 procedure TTFLabel.TextChanged(Sender: TObject);
 var
   s: string;
 begin
-  FChanged := True;
+  Invalidate;
   if AutoSize then
   begin
     Height := Text.Count;
@@ -441,7 +501,7 @@ begin
   Background := Transparency;
   AutoSize := True;
   FText := TStringList.Create;
-  FText.OnChange := @TextChanged; 
+  FText.OnChange := @TextChanged;
   FText.Text := 'Hallo Welt!';
 end;
 

@@ -9,7 +9,7 @@ interface
 
 uses
   Classes, SysUtils, Math,
-  TFTypes in 'tftypes.pas'
+  TFTypes
   {$IfDef Col4}
   , crt
   {$EndIf}
@@ -87,8 +87,8 @@ function GetWindowSize: TWindowSize;
 // Reads a char without the need of enter
 function ReadChar(Blocking: boolean = True): char;
 function LCLColToCanvasColor(Col: cardinal): TColor;
-function GetArrow(seq: String): TArrowKey;    
-function ReadSequence(Blocking: Boolean = True): String;
+function GetArrow(seq: string): TArrowKey;
+function ReadSequence(Blocking: boolean = True): string;
 
 {$If defined(COL8) or defined(Col4)}
 function FindTableIndex(C: cardinal; StartIndex: integer = 0): integer;
@@ -99,40 +99,43 @@ const
 
 implementation
 
-function GetArrow(seq: String): TArrowKey;
+function GetArrow(seq: string): TArrowKey;
 begin
-  Result:=akNone;
+  Result := akNone;
   case seq[1] of
-  #27:
-     if seq.length=3 then
-       case seq[3] of
-       'A': Result:=akUp;
-       'B': Result:=akDown;
-       'C': Result:=akRight;
-       'D': Result:=akLeft;
-       end;
+    #27:
+      if seq.length = 3 then
+        case seq[3] of
+          'A': Result := akUp;
+          'B': Result := akDown;
+          'C': Result := akRight;
+          'D': Result := akLeft;
+        end;
   end;
 end;
 
-function ReadSequence(Blocking: Boolean = True): String;
-var c: Char;
-  l: Integer;
+function ReadSequence(Blocking: boolean = True): string;
+var
+  c: char;
+  l: integer;
 begin
   SetLength(Result, 1);
-  Result[1]:=ReadChar(Blocking);
+  Result[1] := ReadChar(Blocking);
   if Result[1] = #0 then
   begin
     SetLength(Result, 0);
     Exit;
   end
-  else if Result[1] <> #27 then exit;
-  l:=1;
+  else if Result[1] <> #27 then
+    exit;
+  l := 1;
   repeat
-    c:=ReadChar(False);
-    if c>#0 then
-    begin 
-      inc(l);
-      if l>Result.Length then SetLength(Result, Result.Length*2);
+    c := ReadChar(False);
+    if c > #0 then
+    begin
+      Inc(l);
+      if l > Result.Length then
+        SetLength(Result, Result.Length * 2);
       Result[l] := c;
     end;
   until c = #0;
@@ -186,19 +189,20 @@ end;
 
 {$Else}
 
-var NextChars: String;
+var
+  NextChars: string;
 
 // found at http://www.cplusplus.com/forum/articles/19975/
 function ReadChar(Blocking: boolean = True): char;
 var
   STDInHandle: HANDLE;
   ConsoleInput: INPUT_RECORD;
-  RecordCount: Cardinal;
+  RecordCount: cardinal;
 begin
-  if NextChars.Length>0 then
+  if NextChars.Length > 0 then
   begin
-    Result:=NextChars.Chars[0];
-    NextChars:=NextChars.Substring(1);
+    Result := NextChars.Chars[0];
+    NextChars := NextChars.Substring(1);
     Exit;
   end;
   STDInHandle := GetStdHandle(STD_INPUT_HANDLE);
@@ -211,37 +215,73 @@ begin
         (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <> VK_CONTROL) and
         (ConsoleInput.Event.KeyEvent.bKeyDown) then
       begin
-        case ConsoleInput.Event.KeyEvent.AsciiChar of
-        #8, #13, #32..#254: Result := ConsoleInput.Event.KeyEvent.AsciiChar;
-        #9:
+        if (ConsoleInput.Event.KeyEvent.wVirtualKeyCode >= VK_F1) and
+          (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <= VK_F12) then
         begin
-          if ConsoleInput.Event.KeyEvent.dwControlKeyState and $0010 = $0010 then
-          begin
-            NextChars:='[Z';
-            Result:=#27;
-          end
-          else
-            Result:=#9
-        end;
-        #0:
-        begin
-          // Arrows
-          SetLength(NextChars, 2);
-          NextChars[1] := '[';
-          case ConsoleInput.Event.KeyEvent.wVirtualKeyCode of
-          $25: NextChars[2] := 'D';
-          $26: NextChars[2] := 'A';
-          $27: NextChars[2] := 'C';
-          $28: NextChars[2] := 'B';
+          case ConsoleInput.Event.KeyEvent.wVirtualKeyCode of   // F-Keys
+            VK_F1: NextChars := #79'P';
+            VK_F2: NextChars := #79'Q';
+            VK_F3: NextChars := #79'R';
+            VK_F4: NextChars := #79'S';
+            VK_F5: NextChars := #91#49#53'~';
+            VK_F6: NextChars := #91#49#55'~';
+            VK_F7: NextChars := #91#49#56'~';
+            VK_F8: NextChars := #91#49#57'~';
+            VK_F9: NextChars := #91#50#48'~';
+            VK_F10: NextChars := #91#50#49'~';
+            VK_F11: NextChars := #91#50#50'~';
+            VK_F12: NextChars := #91#50#52'~';
           end;
-          Result:=#27;
-        end;
-        end;
+          Result := #27;
+        end
+        else if ConsoleInput.Event.KeyEvent.dwControlKeyState and ($8 or $4) <> 0 then
+        begin
+          if (ConsoleInput.Event.KeyEvent.wVirtualKeyCode >= Ord('A')) and
+            (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <= Ord('Z')) then
+            Result := chr(ConsoleInput.Event.KeyEvent.wVirtualKeyCode - Ord('A') + 1)
+          else if (ConsoleInput.Event.KeyEvent.wVirtualKeyCode >= Ord('3')) and
+            (ConsoleInput.Event.KeyEvent.wVirtualKeyCode <= Ord('7')) then
+            Result := chr(ConsoleInput.Event.KeyEvent.wVirtualKeyCode - Ord('3') + 27);
+        end
+        else
+          case ConsoleInput.Event.KeyEvent.AsciiChar of
+            #8, #13, #32..#254:
+              if ConsoleInput.Event.KeyEvent.dwControlKeyState and $2 = $2 then
+              begin
+                NextChars := ConsoleInput.Event.KeyEvent.AsciiChar;
+                Result := #27;
+              end
+              else
+                Result := ConsoleInput.Event.KeyEvent.AsciiChar;
+            #9:
+            begin
+              if ConsoleInput.Event.KeyEvent.dwControlKeyState and $0010 = $0010 then
+              begin
+                NextChars := '[Z';
+                Result := #27;
+              end
+              else
+                Result := #9;
+            end;
+            #0:
+            begin
+              // Arrows
+              SetLength(NextChars, 2);
+              NextChars[1] := '[';
+              case ConsoleInput.Event.KeyEvent.wVirtualKeyCode of
+                $25: NextChars[2] := 'D';
+                $26: NextChars[2] := 'A';
+                $27: NextChars[2] := 'C';
+                $28: NextChars[2] := 'B';
+              end;
+              Result := #27;
+            end;
+          end;
         Exit;
       end
       else
-        if not Blocking then
-          break;
+      if not Blocking then
+        break;
   Result := #0;
 end;
 
@@ -289,8 +329,9 @@ begin
           Ba := trunc((Ba / 100) * (100 - B.Opc) + (Bb / 100) * B.Opc);
           Result.Col := 16 * 36 * ra + 6 * ga + ba;
         end;
-        232..255: Result.Col := trunc(((A.Col - 232) / 100) * (100 - B.Opc) +
-            ((B.Col - 232) / 100) * B.Opc) + 232;
+        232..255: Result.Col :=
+            trunc(((A.Col - 232) / 100) * (100 - B.Opc) + ((B.Col - 232) / 100) *
+            B.Opc) + 232;
         else
         begin
           Result.Col := ifthen(b.Opc >= 50, b.Col, a.Col);
@@ -335,7 +376,7 @@ var
 begin
   C1.Color := A;
   C2.Color := B;
-  Result := (C1.R - C2.R)**2 + (C1.G - C2.G)**2 + (C1.B - C2.B)**2;
+  Result := (C1.R - C2.R) ** 2 + (C1.G - C2.G) ** 2 + (C1.B - C2.B) ** 2;
 end;
 
 function FindTableIndex(C: cardinal; StartIndex: integer = 0): integer;
@@ -375,16 +416,17 @@ begin
   Result.G := G;
   Result.B := B;
   {$Else}
-  Ref.R := {$IfDef COL4}B {$Else}R{$EndIf};
+  Ref.R := B;
   Ref.G := G;
-  Ref.B := {$IfDef COL4}R {$Else}B{$EndIf};
+  Ref.B := R;
   Ref.Opc := 0;
   {$IfDef COL8}
   Result.Opc := 100;
   if (R = B) and (B = G) then // grayscale
     Result.Col := FindTableIndex(Ref.Color, 232)
   else
-    Result.Col := 16 + round(R / 255 * 5) * 36 + round(G / 255 * 5) * 6 + round(B / 255 * 5);
+    Result.Col := 16 + round(R / 255 * 5) * 36 + round(G / 255 * 5) *
+      6 + round(B / 255 * 5);
   {$Else}// Col4
   Result := FindTableIndex(Ref.Color);
   {$EndIf}
@@ -578,24 +620,24 @@ end;
 procedure TTextCanvas.PrintLine(y: integer);
 var
   x, len: integer;
-  str: String;
-  fg,bg: TColor;
+  str: string;
+  fg, bg: TColor;
 begin
   GotoXY(1, y + 1);
-  x:=0;
+  x := 0;
   while x < Width do
   begin
     SetLength(str, Width);
-    len:=0;
-    fg:=Obj[x, y].Color.Foreground;
-    bg:=Obj[x, y].Color.Background;
-    while (Obj[x+len,y].Color.Foreground = fg) And
-          (Obj[x+len,y].Color.Background = bg) do
+    len := 0;
+    fg := Obj[x, y].Color.Foreground;
+    bg := Obj[x, y].Color.Background;
+    while (Obj[x + len, y].Color.Foreground = fg) and
+      (Obj[x + len, y].Color.Background = bg) do
     begin
-      str[len+1] := Obj[x+len,y].Value;
-      inc(len);
+      str[len + 1] := Obj[x + len, y].Value;
+      Inc(len);
     end;
-    SetLength(str,len);
+    SetLength(str, len);
     if fg < Transparency then
       TextColor(fg);
     if bg < Transparency then
@@ -849,7 +891,7 @@ end;
 
 initialization
   {$IfDef WINDOWS}
-  NextChars:='';
+  NextChars := '';
   {$EndIf}
 
 end.
