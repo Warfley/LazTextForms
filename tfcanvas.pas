@@ -102,6 +102,7 @@ implementation
 function GetArrow(seq: string): TArrowKey;
 begin
   Result := akNone;
+  if seq.Length = 0 then exit;
   case seq[1] of
     #27:
       if seq.length = 3 then
